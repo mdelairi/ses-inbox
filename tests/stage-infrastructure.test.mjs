@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applicationTemplate, artifactTemplate, certificateTemplate } from '../infra/stage.mjs';
+import { applicationTemplate, artifactTemplate, certificateTemplate, storageTemplate } from '../infra/stage.mjs';
 
 test('stage has no real-mail resources or permissions, defaults disabled, and requires signed origin calls', () => {
   const template = applicationTemplate(), resources = template.Resources;
@@ -14,6 +14,8 @@ test('stage has no real-mail resources or permissions, defaults disabled, and re
   assert.doesNotMatch(JSON.stringify(policy), /ses:|s3:|iam:|FullAccess/);
   assert.ok(policy.Statement.every(statement => statement.Resource !== '*'));
   assert.ok(Object.values(resources).every(resource => !/SES|Route53|DSQL/.test(resource.Type)));
+  const sample = JSON.stringify(resources.AppRole.Properties.Policies[1]);
+  assert.match(sample, /dsql:DbConnect/); assert.doesNotMatch(sample, /DbConnectAdmin|ses:|iam:/);
 });
 test('all CloudFront requests reach the auth gateway with no cached auth responses', () => {
   const config = applicationTemplate().Resources.Distribution.Properties.DistributionConfig;
@@ -35,10 +37,10 @@ test('artifact storage is private, encrypted, TLS-only, versioned and retained; 
   assert.equal(sessions.Properties.DeletionProtectionEnabled, true);
 });
 test('toolkit templates fit inline limits and every reference resolves', () => {
-  for (const template of [artifactTemplate(), certificateTemplate(), applicationTemplate()]) {
+  for (const template of [artifactTemplate(), certificateTemplate(), storageTemplate(), applicationTemplate()]) {
     assert.ok(Buffer.byteLength(JSON.stringify(template, null, 2)) < 51200);
     assert.equal(template.Metadata.AWSToolsMetrics.AWSAgentToolkit, 'aws-cloudformation@2');
-    const names = new Set([...Object.keys(template.Resources), ...Object.keys(template.Parameters), 'AWS::StackName', 'AWS::Partition', 'AWS::AccountId']);
+    const names = new Set([...Object.keys(template.Resources), ...Object.keys(template.Parameters), 'AWS::StackName', 'AWS::Partition', 'AWS::AccountId', 'AWS::NoValue']);
     function inspect(value) {
       if (!value || typeof value !== 'object') return;
       if (value.Ref) assert.ok(names.has(value.Ref), `Missing Ref ${value.Ref}`);

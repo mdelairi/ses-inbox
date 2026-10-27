@@ -1,0 +1,20 @@
+{
+  "verifiedAt": "2026-10-27T20:02:55.528Z",
+  "url": "https://stage.example.com",
+  "lambdaSha256": "2af5646712407dbf5e4e95993f654a5e5740bc7b335a2fff9e9890b0e1a2da52",
+  "checks": {
+    "signedOutApiDenied": true,
+    "pinnedOwnerVerified": true,
+    "authenticatedStateRead": true,
+    "stateChecksum": true,
+    "uploadTicket": true,
+    "signedS3Upload": true,
+    "draftPublished": true,
+    "independentDraftRead": true,
+    "attachmentRoundtrip": true,
+    "staleWriteRejected": true,
+    "removedFileCannotBeSigned": true
+  },
+  "syntheticDraftRemoved": true,
+  "temporarySessionRevoked": true
+}

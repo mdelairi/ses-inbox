@@ -3,11 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.1158.0",
     "@aws-sdk/client-secrets-manager": "^3.0.0",
-    "jose": "^6.0.0"
+    "@aws-sdk/credential-providers": "^3.1158.0",
+    "@aws-sdk/dsql-signer": "^3.1158.0",
+    "@aws-sdk/s3-request-presigner": "^3.1158.0",
+    "@aws/aurora-dsql-node-postgres-connector": "^0.1.9",
+    "jose": "^6.0.0",
+    "pg": "^8.23.1"
   },
-  "devDependencies": { "esbuild": "^0.25.0" }
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
 }

@@ -7,19 +7,29 @@
   "stacks": [
     "project-inbox-stage-artifacts",
     "project-inbox-stage-certificate",
-    "project-inbox-stage-app"
+    "project-inbox-stage-app",
+    "project-inbox-stage-storage"
   ],
   "distributionId": "E1EXAMPLE00003",
   "distributionDomain": "d1example00000.cloudfront.net",
   "authTable": "project-inbox-stage-app-Sessions-EXAMPLE",
-  "artifactKey": "releases/abcba46dafc1e6a4f248a0a3558c0db1256a72c5e4637164f6b640369dfc4043/lambda.zip",
-  "lambdaSha256": "abcba46dafc1e6a4f248a0a3558c0db1256a72c5e4637164f6b640369dfc4043",
+  "artifactKey": "releases/2af5646712407dbf5e4e95993f654a5e5740bc7b335a2fff9e9890b0e1a2da52/lambda.zip",
+  "lambdaSha256": "2af5646712407dbf5e4e95993f654a5e5740bc7b335a2fff9e9890b0e1a2da52",
   "checks": {
     "ownerGoogleLogin": true,
     "signedOutAssetProtection": true,
     "directOriginDenied": true,
     "aliasMailboxes": true,
     "fixedSender": true,
-    "logout": true
-  }
+    "logout": true,
+    "sharedDraftAndAttachmentRoundtrip": true,
+    "staleSaveRejected": true,
+    "testSessionRevoked": true,
+    "nativeSharedInboxRendered": true,
+    "snapshotReadRaceCovered": true
+  },
+  "releaseId": "c4e68127ff8a0cca8ebd5a533e205675f7611b917fdf7683f0bf8c7719d3cefb",
+  "scope": "shared-sample-prototype",
+  "mailBucket": "project-inbox-stage-storage-mail-EXAMPLE",
+  "mailDatabaseId": "exampleclusterstage0000000"
 }

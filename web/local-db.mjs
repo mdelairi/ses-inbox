@@ -1,4 +1,7 @@
 const NAME = 'project-inbox-local-v1';
+export const sharedStorage = false;
+export const hasUnsavedChanges = () => false;
+export const storageActions = () => {};
 let database;
 export function openDatabase() {
   if (!database) database = new Promise((resolve, reject) => {

@@ -38,14 +38,15 @@ function response(statusCode, body = '', type = 'text/html; charset=utf-8', extr
 }
 const redirect = (location, cookieValues = []) => ({ ...response(303, '', undefined, { location }), cookies: cookieValues });
 const json = (status, body) => response(status, JSON.stringify(body), 'application/json');
-function loginPage() {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Inbox · Stage</title><style>body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#f3f5f4;font:15px system-ui;color:#33383c}main{max-width:390px;padding:40px;margin:20px;background:white;border:1px solid #dce4df;border-radius:16px}small{color:#697177;letter-spacing:1px}h1{font-size:28px}p{line-height:1.7;color:#697177}a{display:block;background:#426859;color:white;text-align:center;text-decoration:none;padding:13px;border-radius:8px;margin-top:25px}</style></head><body><main><small>PRIVATE STAGING PREVIEW</small><h1>Your project mail.</h1><p>Sign in with your owner Google account to test the interface with sample mail. Sending is simulated; changes stay in this browser.</p><a href="/auth/login">Continue with Google</a></main></body></html>`;
+function loginPage(shared = false) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Inbox · Stage</title><style>body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#f3f5f4;font:15px system-ui;color:#33383c}main{max-width:390px;padding:40px;margin:20px;background:white;border:1px solid #dce4df;border-radius:16px}small{color:#697177;letter-spacing:1px}h1{font-size:28px}p{line-height:1.7;color:#697177}a{display:block;background:#426859;color:white;text-align:center;text-decoration:none;padding:13px;border-radius:8px;margin-top:25px}</style></head><body><main><small>PRIVATE STAGING PREVIEW</small><h1>Your project mail.</h1><p>Sign in with your owner Google account to test the interface with sample mail. Sending is simulated; ${shared ? 'mail and drafts are shared across your signed-in devices' : 'changes stay in this browser'}.</p><a href="/auth/login">Continue with Google</a></main></body></html>`;
 }
 
 // AWS and Google's verifier are injected so security behavior can be tested offline.
-export function createStageHandler({ origin, ownerEmail, store, getGoogleClient, exchangeCode, verifyGoogleToken, asset, now = () => Math.floor(Date.now() / 1000), log = () => {} }) {
+export function createStageHandler({ origin, ownerEmail, store, getGoogleClient, exchangeCode, verifyGoogleToken, asset, api, storageOrigin, now = () => Math.floor(Date.now() / 1000), log = () => {} }) {
   const parsedOrigin = new URL(origin);
   if (parsedOrigin.protocol !== 'https:' || parsedOrigin.origin !== origin || !ownerEmail) throw new Error('Invalid staging configuration');
+  if (storageOrigin && !/^https:\/\/[a-z0-9.-]+\.s3\.us-east-1\.amazonaws\.com$/.test(storageOrigin)) throw new Error('Invalid storage origin');
   const callback = `${origin}/auth/callback`;
   async function session(event) {
     const value = cookies(event)[sessionCookie];
@@ -68,8 +69,24 @@ export function createStageHandler({ origin, ownerEmail, store, getGoogleClient,
         await store.remove(active.pk);
         return { ...json(200, { signedOut: true }), cookies: [cookie(sessionCookie, '', 0), cookie(loginCookie, '', 0)] };
       }
+      if (path.startsWith('/api/') && api) {
+        const active = await session(event);
+        requireThat(active, 401);
+        requireThat(['GET', 'PUT', 'POST'].includes(method), 405);
+        let body;
+        if (method !== 'GET') {
+          requireThat(event.headers?.origin === origin && equal(event.headers?.['x-inbox-csrf'], active.csrf), 403);
+          const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : event.body || '';
+          requireThat(Buffer.byteLength(raw) <= 2 * 1024 * 1024 + 4096, 413);
+          requireThat(equal(event.headers?.['x-amz-content-sha256'], hash(raw)), 400);
+          requireThat(event.headers?.['content-type']?.split(';')[0] === 'application/json', 415);
+          try { body = JSON.parse(raw); } catch { requireThat(false); }
+        }
+        const result = await api({ method, path, body, sub: active.sub });
+        return json(result.status, result.data);
+      }
       requireThat(['GET', 'HEAD'].includes(method), 405);
-      if (path === '/signin') return response(200, method === 'HEAD' ? '' : loginPage());
+      if (path === '/signin') return response(200, method === 'HEAD' ? '' : loginPage(Boolean(api)));
       if (path === '/auth/login') {
         requireThat(method === 'GET', 405);
         const state = token(), binding = token(), verifier = token(), nonce = token();
@@ -105,11 +122,12 @@ export function createStageHandler({ origin, ownerEmail, store, getGoogleClient,
       const file = await asset(path);
       if (!file) return response(404, 'Not found', 'text/plain');
       const result = response(200, method === 'HEAD' ? '' : file.body, file.type);
+      if (storageOrigin) result.headers['content-security-policy'] = headers['content-security-policy'].replace("connect-src 'self'", `connect-src 'self' ${storageOrigin}`);
       if (file.base64 && method !== 'HEAD') result.isBase64Encoded = true;
       return result;
     } catch (error) {
       if (!error.status) log({ name: error.name || 'Error', requestId: event.requestContext?.requestId });
-      return json(error.status || 503, { error: error.status === 403 ? 'Access denied' : error.status ? 'Request rejected' : 'Sign-in is temporarily unavailable' });
+      return json(error.status || 503, { error: error.name === 'MailError' ? error.message : error.status === 403 ? 'Access denied' : error.status ? 'Request rejected' : 'The service is temporarily unavailable' });
     }
   };
 }

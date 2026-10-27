@@ -1,6 +1,6 @@
 import { seedState } from './fixtures.mjs';
 import { FOLDERS, MAX_FILE_BYTES, MAX_TOTAL_BYTES, domainOf, aliasesOf, defaultAlias, createSearchIndex, visibleThreads, conversation, mailboxEntries, inMailbox, setMailboxState, mailboxesOf, selectedMailbox, sendLocally, moveMessages, permanentlyDelete, saveAlias } from './model.mjs';
-import { loadState, persistState } from './local-db.mjs';
+import { loadState, persistState, sharedStorage, hasUnsavedChanges, storageActions } from './local-db.mjs';
 import { escapeHTML as esc, sanitizeHTML, safeLink, htmlText, messageDocument } from './safety.mjs';
 
 const paths = {
@@ -43,7 +43,7 @@ const settingsDialog = document.querySelector('#settings-dialog');
 const aliasDialog = document.querySelector('#alias-dialog');
 const confirmDialog = document.querySelector('#confirm-dialog');
 let state, index, view = { folder: 'inbox', selected: null, query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, domainMenu: false, filters: false, more: false };
-let composer = null, draftTimer, saveQueue = Promise.resolve(), settingsTab = 'aliases', settingsDomain, confirmCallback, lastRange;
+let composer = null, draftTimer, saveQueue = Promise.resolve(), settingsTab = 'aliases', settingsDomain, confirmCallback, lastRange, refreshing = false;
 const remoteLoaded = new Set();
 const uid = () => crypto.randomUUID();
 const initials = name => String(name || '?').split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase();
@@ -59,7 +59,14 @@ function threads() { return visibleThreads(state, { ...view, domain: state.selec
 function selectedGroup() { return threads().find(group => group.id === view.selected); }
 function currentConversation() { return view.selected ? conversation(state, state.selectedDomain, view.selected, activeAddress()) : []; }
 function updateIndex() { index = createSearchIndex(state.messages); }
-function showStorageError(error) { const notice = document.querySelector('#storage-notice'); notice.hidden = false; notice.textContent = error.message; }
+function showStorageError(error) {
+  const notice = document.querySelector('#storage-notice'); notice.hidden = false; notice.textContent = error.message;
+  if (sharedStorage) {
+    const composeError = composeDialog.open && document.querySelector('#compose-error');
+    if (composeError) { composeError.hidden = false; composeError.textContent = error.message; storageActions(composeError); }
+    else storageActions(notice);
+  }
+}
 function toast(message, { undo, error = false } = {}) {
   const element = document.createElement('div'); element.className = `toast${error ? ' error' : ''}`;
   const text = document.createElement('span'); text.textContent = message; element.append(text);
@@ -311,7 +318,13 @@ document.addEventListener('click', async event => {
       case 'clear-filters': view.alias = ''; view.source = ''; view.environment = ''; view.unread = false; view.filters = false; view.selected = null; render(); break;
       case 'clear-search': view.query = ''; view.selected = null; render(); document.querySelector('#mail-search').focus(); break;
       case 'reset-view': view.query = ''; view.alias = ''; view.source = ''; view.environment = ''; view.unread = false; view.selected = null; render(); break;
-      case 'refresh': { const saved = await loadState(); if (saved) { state = saved; updateIndex(); render(); } toast('Local sample mailbox is up to date.'); break; }
+      case 'refresh': {
+        if (sharedStorage && composer) { toast('Save and close your draft before refreshing.'); break; }
+        refreshing = true; root.inert = true;
+        try { await saveQueue.catch(() => {}); const saved = await loadState(); if (saved) { state = saved; updateIndex(); render(); } toast(sharedStorage ? 'Shared sample mailbox is up to date.' : 'Local sample mailbox is up to date.'); }
+        finally { refreshing = false; root.inert = false; }
+        break;
+      }
       case 'archive': await moveCurrent('archive'); break;
       case 'trash': await moveCurrent('trash'); break;
       case 'spam': await moveCurrent('spam'); break;
@@ -383,6 +396,7 @@ document.addEventListener('mousedown', event => {
 });
 // Keyboard activation of formatting buttons follows the same path as pointer activation.
 document.addEventListener('keydown', event => {
+  if (!state || refreshing) return;
   if (event.target.matches?.('.mailbox-tab') && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
     event.preventDefault();
     const tabs = [...document.querySelectorAll('.mailbox-tab')], position = tabs.indexOf(event.target);
@@ -410,9 +424,17 @@ composeDialog.addEventListener('paste', event => {
 composeDialog.addEventListener('dragover', event => { if (event.dataTransfer?.types.includes('Files')) event.preventDefault(); });
 composeDialog.addEventListener('drop', event => { if (event.dataTransfer?.files.length) { event.preventDefault(); rememberSelection(); void addFiles([...event.dataTransfer.files]); } });
 document.addEventListener('selectionchange', () => { if (composer) rememberSelection(); });
-window.addEventListener('beforeunload', event => { if (composer?.dirty) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (composer?.dirty || hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; } });
 window.addEventListener('pagehide', () => { if (composer?.dirty) { captureDraft(); const record = draftRecord(), position = state.drafts.findIndex(item => item.id === record.id); if (position < 0) state.drafts.push(record); else state.drafts[position] = record; void commit(); } });
 
-try { state = await loadState(); if (!state || state.schema !== 1) { state = seedState(); await persistState(state); } }
-catch (error) { state = seedState(); showStorageError(new Error(`${error.message} This preview is running without saved changes.`)); }
-updateIndex(); settingsDomain = state.selectedDomain; render();
+window.addEventListener('inbox:storage-error', event => showStorageError(event.detail));
+window.addEventListener('inbox:discard-unsaved', () => { if (composer) composer.dirty = false; });
+async function start() {
+  try { state = await loadState(); if (!state || state.schema !== 1) { state = seedState(); await persistState(state); } }
+  catch (error) {
+    if (sharedStorage) { showStorageError(error); root.innerHTML = '<main style="padding:40px"><h1>Shared mail could not be loaded</h1><p>Your saved workspace has not been replaced.</p><button id="retry-start">Try again</button></main>'; document.querySelector('#retry-start').onclick = () => location.reload(); return; }
+    state = seedState(); showStorageError(new Error(`${error.message} This preview is running without saved changes.`));
+  }
+  updateIndex(); settingsDomain = state.selectedDomain; render();
+}
+await start();

@@ -3,6 +3,7 @@ import { DynamoDBClient, GetItemCommand, PutItemCommand, DeleteItemCommand } fro
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { createStageHandler } from './auth.mjs';
 import { verifyGoogleToken } from './google.mjs';
+import { createCloudMailApi } from './mail-store.mjs';
 
 const region = process.env.AWS_REGION;
 const dynamo = new DynamoDBClient({ region, maxAttempts: 2 });
@@ -53,4 +54,5 @@ async function asset(path) {
   }
   return cachedAssets.get(name);
 }
-export const handler = createStageHandler({ origin: process.env.PUBLIC_ORIGIN, ownerEmail: process.env.OWNER_EMAIL, store, getGoogleClient, exchangeCode, verifyGoogleToken, asset, log: data => console.error('stage-request-failed', data) });
+const api = process.env.MAIL_BUCKET && process.env.MAIL_DATABASE_HOST ? createCloudMailApi({ bucket: process.env.MAIL_BUCKET, host: process.env.MAIL_DATABASE_HOST, region }) : undefined;
+export const handler = createStageHandler({ origin: process.env.PUBLIC_ORIGIN, ownerEmail: process.env.OWNER_EMAIL, store, getGoogleClient, exchangeCode, verifyGoogleToken, asset, api, storageOrigin: api ? `https://${process.env.MAIL_BUCKET}.s3.us-east-1.amazonaws.com` : undefined, log: data => console.error('stage-request-failed', data) });

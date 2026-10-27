@@ -1,6 +1,6 @@
 # Mail storage foundation
 
-Prepared October 27, 2026. **Storage design and isolated feasibility work.** The hosted stage still uses browser-local sample mail. After separate approval, a disposable staging DSQL cluster was created for a synthetic benchmark. It has no connection to the app or email routing. Results and cleanup are recorded in the benchmark report.
+Prepared October 27, 2026. **Storage design and isolated feasibility work.** The hosted stage now uses a separate DSQL/S3 workspace-snapshot bridge for shared sample mail (see [STAGING.md](STAGING.md)); the production relational schema below is not yet connected. After separate approval, a disposable staging DSQL cluster was created for a synthetic benchmark. It has no connection to the app or email routing. Results and cleanup are recorded in the benchmark report.
 
 ## Ownership and stored data
 

@@ -8,7 +8,7 @@ const checks = [], add = (label, ok, detail = '') => checks.push({ label, ok, ..
 add('Staging account and region are isolated', config.environment === 'staging' && config.accountId === '222222222222' && config.region === 'us-east-1');
 add('Owner account is explicit', config.ownerEmail === 'owner@example.net');
 add('Dedicated Example staging hostname', /^[a-z0-9-]+\.example\.com$/.test(config.hostname));
-for (const field of ['googleSecretArn', 'certificateArn', 'artifactBucket']) add(`${field} is configured`, Boolean(config[field]));
+for (const field of ['googleSecretArn', 'certificateArn', 'artifactBucket', 'mailBucket', 'mailDatabaseHost', 'mailDatabaseArn']) add(`${field} is configured`, Boolean(config[field]));
 try { await access(new URL('stage/package-lock.json', root)); add('Staging dependency lockfile exists', true); }
 catch { add('Staging dependency lockfile exists', false, 'Dependency installation is pending'); }
 try {
@@ -24,7 +24,7 @@ if (process.argv.includes('--aws')) {
     const identity = JSON.parse(execFileSync('aws', ['sts', 'get-caller-identity', '--profile', config.profile, '--output', 'json'], { encoding: 'utf8', timeout: 20000, stdio: ['ignore', 'pipe', 'pipe'] }));
     add('Live AWS identity matches staging', identity.Account === config.accountId);
     if (identity.Account === config.accountId) {
-      for (const template of ['artifacts', 'certificate', 'application']) {
+      for (const template of ['artifacts', 'certificate', 'storage', 'application']) {
         try { execFileSync('aws', ['cloudformation', 'validate-template', '--profile', config.profile, '--region', config.region, '--template-body', `file://${fileURLToPath(new URL(`build/stage/templates/${template}.json`, root))}`], { encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] }); add(`AWS accepts ${template} template structure`, true); }
         catch { add(`AWS accepts ${template} template structure`, false, 'Run the validation command directly for diagnostics'); }
       }
