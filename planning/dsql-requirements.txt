@@ -1,0 +1,2 @@
+aurora-dsql-python-connector==0.2.7
+psycopg==3.3.6

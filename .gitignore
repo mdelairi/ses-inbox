@@ -6,6 +6,8 @@ dist/
 playwright-report/
 test-results/
 .DS_Store
+__pycache__/
+*.pyc
 .audit/
 .tools/
 .stage-secrets/

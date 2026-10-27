@@ -103,3 +103,5 @@ Copy `stage/entry.mjs` to `.audit/stage-entry.js` before this command, preservin
 7. Roll back by restoring the previous immutable artifact key or disabling this distribution. Retain the auth table and owner pin. To stop usage, disable the distribution and revoke sessions; deletion of retained resources is a separately reviewed cleanup, not an automatic rollback step.
 
 Production SES receiving, real sent capture, mailbox retention/backups, DSQL, and iPhone background push remain outside this sample-stage release.
+
+The next storage milestone is specified in [BACKEND_STORAGE.md](BACKEND_STORAGE.md). A separately approved disposable DSQL benchmark tests its schema/search primitives; [results and cleanup](planning/STORAGE_BENCHMARK.md) are recorded independently of this deployment. The stage release, authentication table, and browser-local sample data are unchanged by that experiment.

@@ -51,6 +51,8 @@ Eight browser journeys cover domain/search/filter behaviour, draft persistence, 
 
 ## Still to connect
 
+The next backend foundation is documented in [BACKEND_STORAGE.md](BACKEND_STORAGE.md), with a candidate SQL schema, a reproducible local search/storage probe, and a separately approved temporary DSQL experiment. See [measured results](planning/STORAGE_BENCHMARK.md). Run `python3 -m unittest discover -s backend -p 'test_*.py'` and `python3 planning/benchmark_storage.py --sizes 1000 10000 50000` for local-only checks. The UI is not yet connected to server mailbox storage.
+
 The private sample-only staging release is live at [stage.example.com](https://stage.example.com), with Google sign-in restricted to the owner. See [STAGING.md](STAGING.md) for resources, release commands, validation, and the runbook. `npm run stage:prepare` is local-only; `npm run stage:check` reports readiness without provisioning anything.
 
 Production mail integration, real SES receiving/sending, automated project capture, DSQL persistence/search-cost benchmarking, server-side drafts, background iPhone push, private backups, and deployment are not connected. The browser word index demonstrates search behaviour; it does not validate DSQL cost or CloudFront configuration.

@@ -1,0 +1,633 @@
+{
+  "kind": "LOCAL_SQLITE_FEASIBILITY_ONLY",
+  "dsql_measured": false,
+  "python": "3.14.2",
+  "sqlite": "3.50.4",
+  "schema_sha256": "4e3932e257ae9f8da1bcc2c6869c9730a7e2f2baa796eeaa14ca08b7f4485b58",
+  "limitations": [
+    "Synthetic short text, no actual mail or AWS resources.",
+    "SQLite sizes and timings cannot predict DSQL storage, latency, or DPUs.",
+    "No network, IAM, distributed transactions, or background billing measured.",
+    "Large messages, Unicode-heavy mail and production distributions need cloud validation."
+  ],
+  "datasets": [
+    {
+      "messages": 1000,
+      "mailbox_entries": 1036,
+      "position_rows": 40002,
+      "positions_per_message": 40.002,
+      "sqlite_file_bytes": 9990144,
+      "sqlite_bytes_per_message": 9990.144,
+      "ingest_seconds": 0.144,
+      "queries": [
+        {
+          "case": "inbox/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.024,
+          "max_ms": 0.143,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)"
+          ]
+        },
+        {
+          "case": "common/term",
+          "first_page_rows": 50,
+          "median_ms": 0.629,
+          "max_ms": 0.885,
+          "sqlite_query_plan": [
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "REUSE LIST SUBQUERY 1",
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "common/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.056,
+          "max_ms": 0.081,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        },
+        {
+          "case": "rare/term",
+          "first_page_rows": 1,
+          "median_ms": 0.038,
+          "max_ms": 0.047,
+          "sqlite_query_plan": [
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "REUSE LIST SUBQUERY 1",
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "rare/mailbox",
+          "first_page_rows": 1,
+          "median_ms": 0.258,
+          "max_ms": 0.278,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        },
+        {
+          "case": "phrase/term",
+          "first_page_rows": 48,
+          "median_ms": 0.157,
+          "max_ms": 0.29,
+          "sqlite_query_plan": [
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "REUSE LIST SUBQUERY 1",
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "CORRELATED SCALAR SUBQUERY 4",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "phrase/mailbox",
+          "first_page_rows": 48,
+          "median_ms": 0.317,
+          "max_ms": 0.352,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)"
+          ]
+        },
+        {
+          "case": "address/term",
+          "first_page_rows": 50,
+          "median_ms": 0.79,
+          "max_ms": 0.913,
+          "sqlite_query_plan": [
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "REUSE LIST SUBQUERY 1",
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 4",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "address/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.112,
+          "max_ms": 0.132,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)"
+          ]
+        },
+        {
+          "case": "environment/term",
+          "first_page_rows": 50,
+          "median_ms": 0.356,
+          "max_ms": 0.358,
+          "sqlite_query_plan": [
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "REUSE LIST SUBQUERY 1",
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "environment/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.113,
+          "max_ms": 0.123,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        },
+        {
+          "case": "absent/term",
+          "first_page_rows": 0,
+          "median_ms": 0.036,
+          "max_ms": 0.04,
+          "sqlite_query_plan": [
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "REUSE LIST SUBQUERY 1",
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "absent/mailbox",
+          "first_page_rows": 0,
+          "median_ms": 0.25,
+          "max_ms": 0.274,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        }
+      ]
+    },
+    {
+      "messages": 10000,
+      "mailbox_entries": 10357,
+      "position_rows": 400011,
+      "positions_per_message": 40.001,
+      "sqlite_file_bytes": 97918976,
+      "sqlite_bytes_per_message": 9791.898,
+      "ingest_seconds": 1.931,
+      "queries": [
+        {
+          "case": "inbox/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.023,
+          "max_ms": 0.074,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)"
+          ]
+        },
+        {
+          "case": "common/term",
+          "first_page_rows": 50,
+          "median_ms": 6.292,
+          "max_ms": 6.543,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "common/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.063,
+          "max_ms": 0.103,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        },
+        {
+          "case": "rare/term",
+          "first_page_rows": 5,
+          "median_ms": 0.043,
+          "max_ms": 0.063,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "rare/mailbox",
+          "first_page_rows": 5,
+          "median_ms": 2.822,
+          "max_ms": 2.922,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        },
+        {
+          "case": "phrase/term",
+          "first_page_rows": 50,
+          "median_ms": 1.523,
+          "max_ms": 1.737,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 4",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "phrase/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.378,
+          "max_ms": 0.488,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)"
+          ]
+        },
+        {
+          "case": "address/term",
+          "first_page_rows": 50,
+          "median_ms": 8.625,
+          "max_ms": 9.299,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 4",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "address/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.124,
+          "max_ms": 0.159,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)"
+          ]
+        },
+        {
+          "case": "environment/term",
+          "first_page_rows": 50,
+          "median_ms": 4.584,
+          "max_ms": 4.886,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "environment/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.128,
+          "max_ms": 0.164,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        },
+        {
+          "case": "absent/term",
+          "first_page_rows": 0,
+          "median_ms": 0.036,
+          "max_ms": 0.044,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "absent/mailbox",
+          "first_page_rows": 0,
+          "median_ms": 2.663,
+          "max_ms": 2.856,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        }
+      ]
+    },
+    {
+      "messages": 50000,
+      "mailbox_entries": 51785,
+      "position_rows": 2000051,
+      "positions_per_message": 40.001,
+      "sqlite_file_bytes": 491921408,
+      "sqlite_bytes_per_message": 9838.428,
+      "ingest_seconds": 12.702,
+      "queries": [
+        {
+          "case": "inbox/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.027,
+          "max_ms": 0.098,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)"
+          ]
+        },
+        {
+          "case": "common/term",
+          "first_page_rows": 50,
+          "median_ms": 36.832,
+          "max_ms": 37.609,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "common/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.074,
+          "max_ms": 0.204,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        },
+        {
+          "case": "rare/term",
+          "first_page_rows": 28,
+          "median_ms": 0.082,
+          "max_ms": 0.204,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "rare/mailbox",
+          "first_page_rows": 28,
+          "median_ms": 18.96,
+          "max_ms": 20.134,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        },
+        {
+          "case": "phrase/term",
+          "first_page_rows": 50,
+          "median_ms": 9.748,
+          "max_ms": 10.092,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 4",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "phrase/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.504,
+          "max_ms": 0.673,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH q USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=? AND section=? AND position=?)"
+          ]
+        },
+        {
+          "case": "address/term",
+          "first_page_rows": 50,
+          "median_ms": 49.835,
+          "max_ms": 50.269,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 4",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "address/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.138,
+          "max_ms": 0.281,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)",
+            "CORRELATED SCALAR SUBQUERY 3",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=? AND field=?)"
+          ]
+        },
+        {
+          "case": "environment/term",
+          "first_page_rows": 50,
+          "median_ms": 28.142,
+          "max_ms": 29.099,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "environment/mailbox",
+          "first_page_rows": 50,
+          "median_ms": 0.143,
+          "max_ms": 0.256,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        },
+        {
+          "case": "absent/term",
+          "first_page_rows": 0,
+          "median_ms": 0.036,
+          "max_ms": 0.052,
+          "sqlite_query_plan": [
+            "SEARCH e USING INDEX mailbox_message (domain_id=? AND message_id=? AND alias_id=?)",
+            "LIST SUBQUERY 1",
+            "SEARCH a USING COVERING INDEX search_term (domain_id=? AND token=?)",
+            "CREATE BLOOM FILTER",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 2",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)",
+            "USE TEMP B-TREE FOR ORDER BY"
+          ]
+        },
+        {
+          "case": "absent/mailbox",
+          "first_page_rows": 0,
+          "median_ms": 18.47,
+          "max_ms": 19.129,
+          "sqlite_query_plan": [
+            "SEARCH e USING COVERING INDEX mailbox_recent (domain_id=? AND alias_id=?)",
+            "SEARCH m USING INDEX sqlite_autoindex_messages_1 (domain_id=? AND message_id=?)",
+            "CORRELATED SCALAR SUBQUERY 1",
+            "SEARCH p USING COVERING INDEX search_term (domain_id=? AND token=? AND message_id=? AND generation=?)"
+          ]
+        }
+      ]
+    }
+  ]
+}

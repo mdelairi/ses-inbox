@@ -1,0 +1,41 @@
+{
+  "account": "222222222222",
+  "profile": "example-staging",
+  "region": "us-east-1",
+  "cluster_id": "exampleclusterbench0000000",
+  "metric_window_start": "2026-10-27T12:42:00Z",
+  "cluster_arn": "arn:aws:dsql:us-east-1:222222222222:cluster/exampleclusterbench0000000",
+  "host": "exampleclusterbench0000000.dsql.us-east-1.on.aws",
+  "role_name": "ses-inbox-dsql-benchmark",
+  "role_arn": "arn:aws:iam::222222222222:role/ses-inbox-dsql-benchmark",
+  "db_role": "inbox_benchmark",
+  "schema": "inbox_benchmark",
+  "status": "deleted-and-verified",
+  "estimated_stop_usd": 1,
+  "hard_billing_cap": false,
+  "verified_prices": [
+    {
+      "usage": "USE1-DSQL-DistributedProcessingUnits",
+      "effective": "2026-07-01T00:00:00Z",
+      "unit": "DPU",
+      "usd": "0.0000080000"
+    },
+    {
+      "usage": "USE1-DSQL-Storage-ByteHrs",
+      "effective": "2026-07-01T00:00:00Z",
+      "unit": "GB-Month",
+      "usd": "0.3300000000"
+    }
+  ],
+  "cleanup": {
+    "verified_at": "2026-10-27T13:08:45.181541+00:00",
+    "cluster_lookup": "ResourceNotFoundException",
+    "role_lookup": "NoSuchEntity",
+    "inline_policy_deleted": true,
+    "preexisting_clusters_preserved": [
+      "pvuffhmr5ozh7bu4jwyjvnah7e",
+      "vvueafhgh44ppfsopjqlox7zbm"
+    ],
+    "residual_benchmark_aws_resources": []
+  }
+}

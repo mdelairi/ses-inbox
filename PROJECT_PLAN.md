@@ -2,9 +2,11 @@
 
 Planning draft · updated October 27, 2026. No implementation or cloud changes are authorized by this document itself. The concrete low-cost design and reproducible estimate are in [ARCHITECTURE_PROPOSAL.md](ARCHITECTURE_PROPOSAL.md); it supersedes the earlier candidate architecture below where stated.
 
-Read-only AWS discovery and the local interaction prototype are complete. See [README.md](README.md) for running/reviewing the preview, [AWS_AUDIT.md](AWS_AUDIT.md) for live findings, and [ARCHITECTURE_PROPOSAL.md](ARCHITECTURE_PROPOSAL.md) for the production design. The preview has sample mail and browser-local persistence; it has no live email or Google sign-in. DSQL search-cost and secure CloudFront configuration validation remain outstanding.
+Read-only AWS discovery and the local interaction prototype are complete. See [README.md](README.md) for running/reviewing the preview, [AWS_AUDIT.md](AWS_AUDIT.md) for live findings, and [ARCHITECTURE_PROPOSAL.md](ARCHITECTURE_PROPOSAL.md) for the production design. The local preview has sample mail and browser-local persistence; the hosted stage adds Google sign-in. Live email and complete operating-cost validation remain outstanding; staging CloudFront origin/sign-in checks and the isolated synthetic DSQL benchmark are complete.
 
 The first private staging release is live at [stage.example.com](https://stage.example.com), using owner-only Google sign-in and sample mail. Deployment and live login/logout checks completed October 27, 2026. [STAGING.md](STAGING.md) records the deployed resources, stage-only architecture choices, checks, and runbook. The hosted stage keeps data in its own browser-local store and cannot send real emails. Production mail integrations remain pending.
+
+[BACKEND_STORAGE.md](BACKEND_STORAGE.md) defines candidate mailbox storage, publication, synchronization, and deletion/recovery rules. A separately approved disposable staging DSQL experiment validates the schema and search/database primitives; [measured results](planning/STORAGE_BENCHMARK.md) record its scope, costs, and cleanup. The local SQLite probe also covers 1,000/10,000/50,000 synthetic messages. Neither experiment implements the production repository or connects the hosted app to server mailbox storage; complete operating cost and representative retention remain provisional.
 
 ## Confirmed requirements
 
