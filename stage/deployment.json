@@ -1,0 +1,25 @@
+{
+  "environment": "staging",
+  "verifiedOn": "2026-10-27",
+  "url": "https://stage.example.com",
+  "accountId": "222222222222",
+  "region": "us-east-1",
+  "stacks": [
+    "project-inbox-stage-artifacts",
+    "project-inbox-stage-certificate",
+    "project-inbox-stage-app"
+  ],
+  "distributionId": "E1EXAMPLE00003",
+  "distributionDomain": "d1example00000.cloudfront.net",
+  "authTable": "project-inbox-stage-app-Sessions-EXAMPLE",
+  "artifactKey": "releases/abcba46dafc1e6a4f248a0a3558c0db1256a72c5e4637164f6b640369dfc4043/lambda.zip",
+  "lambdaSha256": "abcba46dafc1e6a4f248a0a3558c0db1256a72c5e4637164f6b640369dfc4043",
+  "checks": {
+    "ownerGoogleLogin": true,
+    "signedOutAssetProtection": true,
+    "directOriginDenied": true,
+    "aliasMailboxes": true,
+    "fixedSender": true,
+    "logout": true
+  }
+}

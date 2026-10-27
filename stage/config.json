@@ -1,0 +1,19 @@
+{
+  "environment": "staging",
+  "profile": "example-staging",
+  "accountId": "222222222222",
+  "region": "us-east-1",
+  "dnsProfile": "example-management",
+  "hostname": "stage.example.com",
+  "ownerEmail": "owner@example.net",
+  "stackPrefix": "project-inbox-stage",
+  "scope": "private-sample-prototype",
+  "googleSecretArn": "arn:aws:secretsmanager:us-east-1:222222222222:secret:project-inbox-stage/google-EXAMPL",
+  "certificateArn": "arn:aws:acm:us-east-1:222222222222:certificate/00000000-0000-0000-0000-000000000000",
+  "artifactBucket": "project-inbox-stage-artifacts-artifacts-EXAMPLE",
+  "distributionId": "E1EXAMPLE00003",
+  "distributionDomain": "d1example00000.cloudfront.net",
+  "authTable": "project-inbox-stage-app-Sessions-EXAMPLE",
+  "googleProjectId": "api-project-000000000000",
+  "googleClientId": "000000000000-exampleclientid.apps.googleusercontent.com"
+}

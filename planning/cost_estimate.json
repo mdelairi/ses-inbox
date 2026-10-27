@@ -1,0 +1,94 @@
+{
+  "verified_on": "2026-10-26",
+  "currency": "USD",
+  "region": "us-east-1",
+  "notes": [
+    "Illustrative incremental monthly workloads; not forecasts from the audit.",
+    "No Lambda, DSQL, SQS, SNS, S3, or Cognito shared free allowances or promotional credits are deducted.",
+    "CloudFront uses its ongoing $0 flat-rate plan, subject to eligibility and secure configuration validation.",
+    "DSQL DPUs are explicit budgeting assumptions to benchmark, not inferred from email counts.",
+    "S3 physical storage includes MIME, extracted attachments, versions and recovery copies; metadata storage includes search index.",
+    "Core totals exclude verification/reset-email custom sender KMS charges; optional key costs are shown separately.",
+    "Existing domain registration, existing DNS zone fees, unrelated project bills, taxes and development labour are excluded."
+  ],
+  "scenarios": [
+    {
+      "scenario": "Personal",
+      "incoming": 200,
+      "outgoing_recipients": 200,
+      "s3_physical_gb": "2",
+      "dsql_budget_dpus": 50000,
+      "components_usd": {
+        "Database compute": "0.40",
+        "Database storage and search index": "0.08",
+        "S3 storage and requests": "0.08",
+        "Lambda": "0.06",
+        "Email": "0.08",
+        "Queues and publish requests": "0.10",
+        "Secrets": "0.81",
+        "Logs and alarms": "0.35",
+        "Google social login via Cognito": "0.01",
+        "CloudFront Free plan": "0.00"
+      },
+      "modeled_total_usd": "1.96",
+      "with_one_dollar_contingency_usd": "2.96",
+      "optional_custom_sender_initial_key_usd": "1.00",
+      "optional_custom_sender_mature_key_usd": "3.00",
+      "unrounded_total_usd": "1.96358343750000"
+    },
+    {
+      "scenario": "Active",
+      "incoming": 2000,
+      "outgoing_recipients": 2000,
+      "s3_physical_gb": "10",
+      "dsql_budget_dpus": 250000,
+      "components_usd": {
+        "Database compute": "2.00",
+        "Database storage and search index": "0.33",
+        "S3 storage and requests": "0.42",
+        "Lambda": "0.28",
+        "Email": "0.76",
+        "Queues and publish requests": "0.20",
+        "Secrets": "0.83",
+        "Logs and alarms": "0.41",
+        "Google social login via Cognito": "0.01",
+        "CloudFront Free plan": "0.00"
+      },
+      "modeled_total_usd": "5.23",
+      "with_one_dollar_contingency_usd": "6.23",
+      "optional_custom_sender_initial_key_usd": "1.03",
+      "optional_custom_sender_mature_key_usd": "3.03",
+      "unrounded_total_usd": "5.2290005000000"
+    },
+    {
+      "scenario": "Growing",
+      "incoming": 10000,
+      "outgoing_recipients": 10000,
+      "s3_physical_gb": "100",
+      "dsql_budget_dpus": 2000000,
+      "components_usd": {
+        "Database compute": "16.00",
+        "Database storage and search index": "1.65",
+        "S3 storage and requests": "3.25",
+        "Lambda": "1.87",
+        "Email": "3.80",
+        "Queues and publish requests": "0.83",
+        "Secrets": "0.85",
+        "Logs and alarms": "0.83",
+        "Google social login via Cognito": "0.01",
+        "CloudFront Free plan": "0.00"
+      },
+      "modeled_total_usd": "29.08",
+      "with_one_dollar_contingency_usd": "30.08",
+      "optional_custom_sender_initial_key_usd": "1.15",
+      "optional_custom_sender_mature_key_usd": "3.15",
+      "unrounded_total_usd": "29.0771700000000"
+    }
+  ],
+  "s3_storage_only_usd_per_month": {
+    "10": "0.23",
+    "100": "2.30",
+    "1000": "23.00"
+  },
+  "additional_100000_dpus_usd": "0.80"
+}

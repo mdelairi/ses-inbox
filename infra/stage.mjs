@@ -1,0 +1,52 @@
+const ref = value => ({ Ref: value });
+const get = (resource, field) => ({ 'Fn::GetAtt': [resource, field] });
+const sub = value => ({ 'Fn::Sub': value });
+const context = (why, must = []) => ({ 'com.aws.cloudformation.Context': { why, must } });
+const resource = (Type, Properties, why, must = [], extra = {}) => ({ Type, Metadata: context(why, must), Properties, ...extra });
+const base = Description => ({ AWSTemplateFormatVersion: '2010-09-09', Description, Metadata: { AWSToolsMetrics: { AWSAgentToolkit: 'aws-cloudformation@2' }, ...context('Independent sample-only staging environment', ['No SES access or mail/DNS routing changes', 'Authenticate every application asset; never cache authenticated responses']) } });
+const environment = { Type: 'String', Default: 'staging', AllowedValues: ['staging'] };
+const hostname = { Type: 'String', AllowedPattern: '^[a-z0-9][a-z0-9-]*\\.example\\.com$' };
+const retain = { DeletionPolicy: 'Retain', UpdateReplacePolicy: 'Retain' };
+const tags = [{ Key: 'Project', Value: 'project-inbox' }, { Key: 'Environment', Value: ref('Environment') }];
+export function artifactTemplate() {
+  return { ...base('Private staging release artifacts, isolated from all message storage.'), Parameters: { Environment: environment }, Resources: {
+    Artifacts: resource('AWS::S3::Bucket', { PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true }, BucketEncryption: { ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }] }, OwnershipControls: { Rules: [{ ObjectOwnership: 'BucketOwnerEnforced' }] }, VersioningConfiguration: { Status: 'Enabled' }, LifecycleConfiguration: { Rules: [{ Id: 'OldReleaseVersions', Status: 'Enabled', NoncurrentVersionExpiration: { NoncurrentDays: 30 } }] }, Tags: tags }, 'Retain private release archives for rollback; never store email or OAuth secrets here', ['Public access blocked', 'TLS required', 'Retain bucket on replacement/deletion'], retain),
+    ArtifactPolicy: resource('AWS::S3::BucketPolicy', { Bucket: ref('Artifacts'), PolicyDocument: { Version: '2012-10-17', Statement: [{ Sid: 'DenyInsecureTransport', Effect: 'Deny', Principal: '*', Action: 's3:*', Resource: [get('Artifacts', 'Arn'), sub('${Artifacts.Arn}/*')], Condition: { Bool: { 'aws:SecureTransport': false } } }] } }, 'Enforce TLS for release storage', ['Deny remains in addition to IAM access controls']),
+  }, Outputs: { ArtifactBucket: { Description: 'Private bucket for release ZIP uploads', Value: ref('Artifacts') } } };
+}
+export function certificateTemplate() {
+  return { ...base('Staging TLS certificate; DNS validation is coordinated separately with the DNS account.'), Parameters: { Hostname: hostname, Environment: environment }, Resources: {
+    Certificate: resource('AWS::CertificateManager::Certificate', { DomainName: ref('Hostname'), ValidationMethod: 'DNS', Tags: tags }, 'Certificate in the distribution region for one private staging hostname', ['Deploy in us-east-1', 'Validation CNAME only; no MX or receiving-rule changes'], retain),
+  }, Outputs: { CertificateArn: { Description: 'Certificate ARN used by the app stack after DNS validation', Value: ref('Certificate') } } };
+}
+export function applicationTemplate() {
+  const distributionArn = sub('arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}');
+  return { ...base('Owner-only Google-authenticated staging prototype; sample mail stays in the browser and SES is unavailable.'), Parameters: {
+    Environment: environment, Hostname: hostname,
+    OwnerEmail: { Type: 'String', AllowedPattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$' },
+    CertificateArn: { Type: 'String', AllowedPattern: '^arn:aws:acm:us-east-1:[0-9]{12}:certificate/.+$' },
+    GoogleSecretArn: { Type: 'String', AllowedPattern: '^arn:aws:secretsmanager:us-east-1:[0-9]{12}:secret:.+$', Description: 'Existing staging secret ARN containing clientId and clientSecret, never the secret value' },
+    ArtifactBucket: { Type: 'String', MinLength: 3 }, ArtifactKey: { Type: 'String', AllowedPattern: '^releases/[a-f0-9]{64}/lambda\\.zip$' },
+    EnableDistribution: { Type: 'String', Default: 'false', AllowedValues: ['false', 'true'], Description: 'Enable only after release and authentication prerequisites are reviewed' },
+  }, Conditions: { ServePreview: { 'Fn::Equals': [ref('EnableDistribution'), 'true'] } }, Resources: {
+    Sessions: resource('AWS::DynamoDB::Table', { BillingMode: 'PAY_PER_REQUEST', AttributeDefinitions: [{ AttributeName: 'pk', AttributeType: 'S' }], KeySchema: [{ AttributeName: 'pk', KeyType: 'HASH' }], TimeToLiveSpecification: { AttributeName: 'expiresAt', Enabled: true }, DeletionProtectionEnabled: true, Tags: tags }, 'Small staging authentication store; default AWS-owned encryption avoids a custom key charge', ['No message contents', 'Owner pin has no TTL', 'Check session/login expiry in code; TTL cleanup is asynchronous', 'Retain stable owner pin on rollback'], retain),
+    Logs: resource('AWS::Logs::LogGroup', { LogGroupName: sub('/aws/lambda/${AWS::StackName}-app'), RetentionInDays: 7, Tags: tags }, 'Minimal operational errors; no request/callback payload logging', ['Never log OAuth codes, cookies, secrets or message content']),
+    AppRole: resource('AWS::IAM::Role', { AssumeRolePolicyDocument: { Version: '2012-10-17', Statement: [{ Effect: 'Allow', Principal: { Service: 'lambda.amazonaws.com' }, Action: 'sts:AssumeRole' }] }, Policies: [{ PolicyName: 'StageAuthOnly', PolicyDocument: { Version: '2012-10-17', Statement: [
+      { Effect: 'Allow', Action: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:DeleteItem'], Resource: get('Sessions', 'Arn') },
+      { Effect: 'Allow', Action: ['secretsmanager:GetSecretValue'], Resource: ref('GoogleSecretArn') },
+      { Effect: 'Allow', Action: ['logs:CreateLogStream', 'logs:PutLogEvents'], Resource: get('Logs', 'Arn') },
+    ] } }], Tags: tags }, 'Only authentication records, one OAuth secret, and own logs', ['No SES, production, message-storage or IAM mutation permission']),
+    App: resource('AWS::Lambda::Function', { FunctionName: sub('${AWS::StackName}-app'), Runtime: 'nodejs24.x', Architectures: ['arm64'], Handler: 'index.handler', MemorySize: 256, Timeout: 20, ReservedConcurrentExecutions: 10, Role: get('AppRole', 'Arn'), Code: { S3Bucket: ref('ArtifactBucket'), S3Key: ref('ArtifactKey') }, Environment: { Variables: { PUBLIC_ORIGIN: sub('https://${Hostname}'), OWNER_EMAIL: ref('OwnerEmail'), AUTH_TABLE: ref('Sessions'), GOOGLE_SECRET_ARN: ref('GoogleSecretArn') } }, Tags: tags }, 'On-demand private auth gateway and bundled static prototype; allow concurrent browser asset loading', ['Protect every asset', 'Do not bundle the legacy real-mail API', 'No provisioned concurrency']),
+    AppUrl: resource('AWS::Lambda::Url', { TargetFunctionArn: get('App', 'Arn'), AuthType: 'AWS_IAM', InvokeMode: 'BUFFERED' }, 'Signed CloudFront origin only', ['Never change AuthType to NONE']),
+    OriginAccess: resource('AWS::CloudFront::OriginAccessControl', { OriginAccessControlConfig: { Name: sub('${AWS::StackName}-lambda'), OriginAccessControlOriginType: 'lambda', SigningBehavior: 'always', SigningProtocol: 'sigv4' } }, 'Sign CloudFront origin requests', ['Both scoped Lambda invocation permissions are required']),
+    Distribution: resource('AWS::CloudFront::Distribution', { DistributionConfig: { Enabled: { 'Fn::If': ['ServePreview', true, false] }, Comment: sub('${AWS::StackName} private sample preview'), Aliases: [ref('Hostname')], HttpVersion: 'http2', IPV6Enabled: true, PriceClass: 'PriceClass_100', ViewerCertificate: { AcmCertificateArn: ref('CertificateArn'), SslSupportMethod: 'sni-only', MinimumProtocolVersion: 'TLSv1.2_2021' }, Origins: [{ Id: 'PrivateApp', DomainName: { 'Fn::Select': [2, { 'Fn::Split': ['/', get('AppUrl', 'FunctionUrl')] }] }, OriginAccessControlId: get('OriginAccess', 'Id'), CustomOriginConfig: { OriginProtocolPolicy: 'https-only', OriginSSLProtocols: ['TLSv1.2'] } }], DefaultCacheBehavior: { TargetOriginId: 'PrivateApp', ViewerProtocolPolicy: 'redirect-to-https', AllowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'PATCH', 'POST', 'DELETE'], CachedMethods: ['GET', 'HEAD'], Compress: true, CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad', OriginRequestPolicyId: 'b689b0a8-53d0-40ab-baf2-68738e2966ac' }, CustomErrorResponses: [403, 500, 502, 503, 504].map(ErrorCode => ({ ErrorCode, ErrorCachingMinTTL: 0 })) }, Tags: tags }, 'Dedicated distribution with all auth/asset caching disabled; standard usage pricing is explicit', ['Forward cookies and query strings; omit viewer Host', 'No shared public-site distribution edits', 'No claim of Free flat-rate enrollment from this template']),
+    UrlPermission: resource('AWS::Lambda::Permission', { FunctionName: get('App', 'Arn'), Action: 'lambda:InvokeFunctionUrl', Principal: 'cloudfront.amazonaws.com', SourceArn: distributionArn, FunctionUrlAuthType: 'AWS_IAM' }, 'Allow this distribution to invoke the IAM-authenticated function URL', ['Keep exact distribution scope']),
+    InvokePermission: resource('AWS::Lambda::Permission', { FunctionName: get('App', 'Arn'), Action: 'lambda:InvokeFunction', Principal: 'cloudfront.amazonaws.com', SourceArn: distributionArn, InvokedViaFunctionUrl: true }, 'Second permission required by Lambda function URL authorization', ['Keep exact distribution scope and URL-only condition']),
+  }, Outputs: {
+    DistributionId: { Description: 'Dedicated stage distribution', Value: ref('Distribution') },
+    DistributionDomain: { Description: 'Use for the reviewed DNS A/AAAA alias record', Value: get('Distribution', 'DomainName') },
+    PreviewUrl: { Description: 'Proposed stage URL after DNS and activation', Value: sub('https://${Hostname}') },
+    FunctionUrl: { Description: 'Direct unsigned requests must return 403', Value: get('AppUrl', 'FunctionUrl') },
+    AuthTable: { Description: 'Retained auth table with pinned owner identity', Value: ref('Sessions') },
+  } };
+}

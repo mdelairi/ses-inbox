@@ -1,0 +1,91 @@
+/* Neutral text palette. Green is reserved for surfaces and control accents. */
+:root { --ink: #303438; --muted: #697177; }
+body, input, select, textarea { color: #353a3e; }
+a { color: #4c555c; }
+input::placeholder, textarea::placeholder { color: #858c91; }
+.brand, .domain-switch strong, .list-heading h1,
+.subject-line h2, .panel-heading h3, .reader-empty h2,
+.sender-details strong, .alias-card strong, .notification-card strong,
+.notification-toast strong, .setting-row strong, .info-box strong,
+.dialog-header h2, .profile strong { color: #33383c; }
+.folder-button, .folder-button.active, .active .count,
+.row-subject, .row-head strong, .breadcrumb strong,
+.view-toggle.active, .filter-button.active, .settings-tab.active,
+.settings-domain-select, .compose-field select,
+.attachment strong, .empty-list strong, .storage-stat { color: #42494e; }
+.thread-row.unread .row-head strong, .unread .row-subject { color: #2c3135; }
+.body-text, .editor { color: #41474c; }
+.editor a { color: #4e5860; text-decoration: underline; }
+.row-snippet, .row-head time, .row-foot, .list-footer,
+.preview-label, .eyebrow, .nav-label, .brand span small,
+.list-heading p, .breadcrumb, .count,
+.sender-details .email-address, .sender-details p, .sender-line time,
+.message-position, .toolbar-note, .keyboard-note,
+.collapsed-message strong, .collapsed-message span.preview,
+.dialog-header p, .panel-description, .setting-row p, .alias-card p,
+.form-field, .checkbox-row, .save-status, .attachment small,
+.notification-card p, .notification-card small, .notification-toast p,
+.profile small, .alias-summary p, .empty-list p, .reader-empty p,
+.confirm-copy, .info-box, .storage-stat small { color: #697177; }
+.tag, .thread-count, .recipient-badge, .tag.automated { color: #626b71; }
+.tag.staging { color: #856e45; }
+.tag.local { color: #656e83; }
+.secondary-button, .text-button, .settings-button,
+.settings-tab, .compose-field > label, .cc-toggle,
+.filter-button, .format-button, .filters-popover label,
+.filters-popover button, .popover-menu button { color: #59646b; }
+.icon-button, .avatar, .sender-avatar, .alias-icon,
+.empty-icon, .attachment > svg, .search-field, .shortcut { color: #768087; }
+.icon-button:hover { color: #424b51; }
+.editor:empty::before { color: #81898f; }
+.alias-card.disabled strong { color: #7c8489; }
+.notification-card > svg, .toast.notification-toast { color: #525e66; }
+.text-button.danger, .danger, .form-error { color: #a44135; }
+.compose-button, .primary-button, .mobile-compose { color: #fff; }
+
+/* Workspace accents change with the domain; all reading text stays neutral. */
+:root {
+  --tint: color-mix(in srgb, var(--accent) 11%, white);
+  --workspace-soft: color-mix(in srgb, var(--accent) 5%, white);
+  --workspace-line: color-mix(in srgb, var(--accent) 19%, white);
+}
+.sidebar { background: var(--workspace-soft); border-top: 5px solid var(--accent); padding-top: 23px; overflow-y: auto; }
+.brand-symbol, .compose-button, .primary-button:not(.danger-button), .mobile-compose { background: var(--accent); }
+.compose-button:hover, .primary-button:not(.danger-button):hover, .mobile-compose:hover { background: color-mix(in srgb, var(--accent) 85%, black); }
+.topbar { background: var(--workspace-soft); border-top: 5px solid var(--accent); }
+.domain-switch { border-color: var(--workspace-line); }
+.domain-monogram, .folder-button.active, .view-toggle.active, .filter-button.active, .settings-tab.active, .recipient-badge { background: var(--tint); }
+.folder-button.active { box-shadow: inset 3px 0 var(--accent); }
+.folder-button:hover, .thread-row:hover { background: var(--workspace-soft); }
+.thread-row.selected { background: var(--workspace-soft); border-left-color: var(--accent); }
+.unread-dot, .switch:checked, .storage-meter span { background: var(--accent); }
+.search-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--tint); }
+.dialog-header { background: var(--workspace-soft); border-top: 4px solid var(--accent); }
+.compose-field select:disabled { opacity: 1; color: #41474c; cursor: default; -webkit-text-fill-color: #41474c; }
+.compose-dialog .dialog-header h2 .tag { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.mailbox-note { margin: 14px 8px; font-size: 10px; line-height: 1.8; color: #697177; }
+.mailbox-note strong { display: block; color: #42494e; font-size: 11px; overflow-wrap: anywhere; }
+.compose-button { margin-top: 17px; margin-bottom: 20px; }
+.breadcrumb { flex-wrap: wrap; gap: 4px 8px; }
+.breadcrumb .breadcrumb-address { display: block; flex-basis: 100%; font-size: 11px; font-weight: 550; color: #41474c; order: 1; }
+.list-footer { gap: 10px; padding-left: 16px; padding-right: 16px; }
+.list-footer span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-footer span:last-child { flex-shrink: 0; }
+@media (max-width: 650px) {
+  .sidebar { padding-top: 22px; width: 270px; }
+  .sidebar-spacer { min-height: 6px; }
+  .brand { padding-bottom: 20px; }
+  .breadcrumb { max-width: 47%; }
+  .breadcrumb .breadcrumb-address { display: block; font-size: 10px; overflow-wrap: anywhere; }
+  .search-field { min-width: 105px; width: 43%; }
+  .list-footer { font-size: 8px; }
+}
+
+/* Address tabs belong to the mail panel, keeping folder navigation compact. */
+.mailbox-tabs { display: flex; align-items: stretch; gap: 4px; padding: 0 16px; min-height: 49px; flex: none; overflow-x: auto; scrollbar-width: thin; border-bottom: 1px solid var(--line); background: var(--workspace-soft); }
+.mailbox-tab { position: relative; display: flex; gap: 7px; justify-content: center; align-items: center; flex: 1 0 auto; padding: 14px 10px 12px; border-bottom: 3px solid transparent; color: #697177; font-size: 12px; white-space: nowrap; }
+.mailbox-tab:hover { background: var(--tint); }
+.mailbox-tab.active { border-bottom-color: var(--accent); color: #303438; font-weight: 650; background: color-mix(in srgb, var(--accent) 7%, white); }
+.mailbox-tab .count { background: var(--tint); border-radius: 4px; padding: 1px 5px; color: #42494e; font-size: 9px; }
+.mailbox-tab:focus-visible { outline-offset: -4px; }
+@media (max-width: 650px) { .mailbox-tabs { padding: 0 13px; min-height: 47px; } .mailbox-tab { padding-top: 13px; padding-bottom: 11px; } }

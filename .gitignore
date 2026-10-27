@@ -1,0 +1,16 @@
+node_modules/
+build/
+dist/
+.env*
+!.env.example
+playwright-report/
+test-results/
+.DS_Store
+.audit/
+.tools/
+.stage-secrets/
+.aws/
+client_secret*.json
+*.pem
+*.key
+*.p12
