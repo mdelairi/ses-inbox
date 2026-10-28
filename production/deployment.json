@@ -34,7 +34,8 @@
       "stack": "project-inbox-prod-receiving-exampleorg",
       "rule": "project-inbox-exampleorg",
       "recipients": [
-        "info@example.org"
+        "info@example.org",
+        "support@example.org"
       ]
     }
   ],
@@ -49,6 +50,7 @@
     "realSendDelivered": true,
     "exampleorgReceived": true,
     "rawCopyFiled": true,
-    "alarmEmailSubscribed": "pending-confirmation"
+    "alarmEmailSubscribed": "pending-confirmation",
+    "supportDualDelivery": true
   }
 }

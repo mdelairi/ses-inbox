@@ -2,7 +2,7 @@
 
 **Live October 28, 2026:** [inbox.example.com](https://inbox.example.com). Sign in as `owner@example.net`.
 
-Real mail for info@example.com, taylor@example.com and info@example.org is received and sent here. support@example.org can send but does not receive here yet; it still flows only through ExampleOrg's existing `StoreSupport` rule. Resource identifiers and the release checksum are in `production/config.json` and `production/deployment.json`.
+Real mail for all four addresses is received and sent here. support@example.org is in dual delivery: `project-inbox-exampleorg` files it here, then ExampleOrg's `StoreSupport` rule (which ends with Stop) still stores a 14-day copy and emails an alert. Disabling `StoreSupport` is ExampleOrg's step; keep `project-inbox-exampleorg` above it. Resource identifiers and the release checksum are in `production/config.json` and `production/deployment.json`.
 
 | Item | Value |
 | --- | --- |
@@ -38,7 +38,7 @@ Real mail for info@example.com, taylor@example.com and info@example.org is recei
 
 ## Adding a receiving address
 
-Deploy `build/production/templates/receiving.json` as a new stack per domain with `RuleName=project-inbox-<name>` and exact `Recipients`. The bucket policy only accepts writes from rules named `project-inbox-*` in `exampleorg-support`. The domain then needs an MX record pointing to SES, after checking what that domain receives today. Do not list support@example.org until its cutover from `StoreSupport` is reviewed with ExampleOrg.
+Deploy `build/production/templates/receiving.json` as a new stack per domain with `RuleName=project-inbox-<name>` and exact `Recipients`. The bucket policy only accepts writes from rules named `project-inbox-*` in `exampleorg-support`. The domain then needs an MX record pointing to SES, after checking what that domain receives today. Update an existing stack's `Recipients` with a change set rather than adding a second rule for the same domain. CloudFormation inserts new rules at the top of the set, so they run before `StoreSupport`.
 
 ## Retention and cleanup
 

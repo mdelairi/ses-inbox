@@ -127,6 +127,6 @@ export function receivingTemplate() {
     Recipients: { Type: 'CommaDelimitedList', Description: 'Exact addresses this rule accepts, never a whole domain' },
   }, Rules: { ExactRecipients: { Assertions: [{ Assert: { 'Fn::Not': [{ 'Fn::Contains': [ref('Recipients'), ''] }] }, AssertDescription: 'List exact addresses' }] } }, Resources: {
     Rule: resource('AWS::SES::ReceiptRule', { RuleSetName: RECEIPT_RULE_SET, Rule: { Name: ref('RuleName'), Enabled: true, TlsPolicy: 'Require', ScanEnabled: true, Recipients: ref('Recipients'),
-      Actions: [{ S3Action: { BucketName: ref('MailBucket'), ObjectKeyPrefix: 'incoming/', TopicArn: ref('InboundTopicArn') } }] } }, 'Store and announce mail for the listed inbox addresses only', ['Never list support@example.org until its cutover is reviewed', 'No Stop action, so other rules still see unrelated mail']),
+      Actions: [{ S3Action: { BucketName: ref('MailBucket'), ObjectKeyPrefix: 'incoming/', TopicArn: ref('InboundTopicArn') } }] } }, 'Store and announce mail for the listed inbox addresses only', ['Stay ahead of ExampleOrg\'s StoreSupport, which ends with Stop; support@example.org is listed for its cutover', 'No Stop action, so other rules still see unrelated mail']),
   } };
 }
