@@ -1,0 +1,47 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash, randomUUID } from 'node:crypto';
+import { createMailApi } from '../mail/api.mjs';
+import { postgresAvailable, startPostgres } from './helpers/postgres.mjs';
+import { bucket, mailFixture } from './helpers/mail-fixture.mjs';
+
+let db;
+test.before(async () => { if (postgresAvailable) db = await startPostgres(); });
+test.after(async () => { await db?.stop(); });
+const skip = !postgresAvailable && 'local PostgreSQL is not installed';
+
+async function setup() {
+  const f = await mailFixture(db), calls = [];
+  const ses = { async sendRaw(request) { calls.push(request); return { messageId: `ses-${calls.length}` }; } };
+  const api = createMailApi({ pool: db.pool, objects: f.objects, ses, bucket, configurationSet: 'inbox', now: f.now });
+  const call = async (path, body = {}) => { const result = await api({ method: 'POST', path, body }); if (result.status !== 200) throw Object.assign(new Error(result.data.error), { status: result.status }); return result.data; };
+  return { ...f, api, call, calls };
+}
+
+test('drafts save with compare-and-swap, list per alias, and are removed after sending', { skip }, async () => {
+  const t = await setup(), id = randomUUID(), mailbox = 'info@example.com';
+  const draft = { to: ['client@example.net'], subject: 'Plan', text: 'Draft body' };
+  const first = await t.call('/api/mail/draft/save', { mailbox, id, revision: 0, draft });
+  const second = await t.call('/api/mail/draft/save', { mailbox, id, revision: first.revision, draft: { ...draft, text: 'Edited' } });
+  await assert.rejects(t.call('/api/mail/draft/save', { mailbox, id, revision: first.revision, draft }), { status: 409 });
+  assert.equal((await t.call('/api/mail/draft', { mailbox, id })).draft.text, 'Edited');
+  assert.deepEqual((await t.call('/api/mail/drafts', { mailbox })).map(item => [item.subject, item.revision]), [['Plan', second.revision]]);
+  assert.deepEqual(await t.call('/api/mail/drafts', { mailbox: 'taylor@example.com' }), []);
+  assert.equal([...t.stored.keys()].filter(key => key.startsWith('drafts/')).length, 1);
+  const sent = await t.call('/api/mail/send', { mailbox, attemptId: randomUUID(), draftId: id, ...draft });
+  assert.equal(sent.state, 'sent');
+  assert.deepEqual(await t.call('/api/mail/drafts', { mailbox }), []);
+});
+test('uploads, attachment links and routing errors', { skip }, async () => {
+  const t = await setup(), bytes = Buffer.from('file'), sha256 = createHash('sha256').update(bytes).digest('hex');
+  const ticket = await t.call('/api/mail/upload', { mailbox: 'info@example.com', sha256, size: bytes.length });
+  assert.match(ticket.key, new RegExp(`^uploads/${t.domains.example}/[0-9a-f-]{36}/${sha256}$`));
+  await assert.rejects(t.call('/api/mail/upload', { mailbox: 'info@example.com', sha256, size: 26 * 1024 * 1024 }), { status: 400 });
+  const [delivery] = await t.deliver(['info@example.com'], { attachments: [{ filename: 'a.txt', content: 'abc' }] });
+  const link = await t.call('/api/mail/attachment', { mailbox: 'info@example.com', id: delivery.messageId, part: '0' });
+  assert.equal(link.name, 'a.txt'); assert.match(link.url, /parts\/0$/);
+  assert.deepEqual((await t.api({ method: 'POST', path: '/api/mail/nope', body: {} })).status, 404);
+  assert.deepEqual((await t.api({ method: 'GET', path: '/api/mail/threads' })).status, 405);
+  assert.equal((await t.call('/api/mail/mailboxes')).length, 4);
+  assert.equal((await t.call('/api/mail/threads', { mailbox: 'info@example.com' })).threads.length, 1);
+});
