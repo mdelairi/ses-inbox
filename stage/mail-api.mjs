@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { seedState } from '../web/fixtures.mjs';
+import { entries, entryKey, deletionChanges, withoutDeleted, fileKeys, retirement } from './retention.mjs';
 
 export const MAX_STATE_BYTES = 2 * 1024 * 1024;
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -52,7 +53,7 @@ export function validateState(state, owner) {
         requireThat(typeof file.id === 'string' && typeof file.name === 'string' && file.name.length <= 255 && typeof file.type === 'string');
         requireThat(Number.isSafeInteger(file.size) && file.size >= 0 && file.size <= MAX_FILE_BYTES); recordBytes += file.size;
         if (file.objectKey) {
-          requireThat(new RegExp(`^samples/${owner}/files/[a-f0-9]{64}$`).test(file.objectKey) && file.sha256 === file.objectKey.split('/').at(-1));
+          requireThat(new RegExp(`^samples/${owner}/files/(?:[a-f0-9-]{36}/)?[a-f0-9]{64}$`).test(file.objectKey) && file.sha256 === file.objectKey.split('/').at(-1));
           if (!objects.has(file.objectKey)) { objects.add(file.objectKey); bytes += file.size; }
         } else requireThat(typeof file.content === 'string' && file.content.length < 100000, 'Attachment must be uploaded first');
       }
@@ -65,7 +66,7 @@ export function validateState(state, owner) {
 
 // Stage-only versioned workspace: immutable S3 state/files and a small DSQL CAS head.
 // This is deliberately separate from the eventual relational real-mail repository.
-export function createMailApi({ heads, objects }) {
+export function createMailApi({ heads, objects, now = Date.now }) {
   async function current(owner) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const head = await heads.get(owner);
@@ -73,7 +74,7 @@ export function createMailApi({ heads, objects }) {
       try {
         const text = await objects.read(head.objectKey);
         if (digest(text) !== head.digest) throw new Error('SampleStateIntegrityFailure');
-        return { head, state: JSON.parse(text) };
+        return { head, state: withoutDeleted(JSON.parse(text), await heads.tombstones(owner)) };
       } catch (error) {
         // A concurrent writer can retire this immutable key after we read its
         // head. Retry from the head, never return a mismatched revision/body.
@@ -87,8 +88,9 @@ export function createMailApi({ heads, objects }) {
   return async ({ method, path, body, sub }) => {
     const owner = digest(sub);
     if (path === '/api/files/upload' && method === 'POST') {
+      requireThat(await heads.get(owner), 'Load the shared workspace before uploading files.', 409);
       requireThat(/^[a-f0-9]{64}$/.test(body?.sha256 || '') && Number.isSafeInteger(body.size) && body.size >= 0 && body.size <= MAX_FILE_BYTES, 'Use a file up to 10 MB');
-      const key = `samples/${owner}/files/${body.sha256}`;
+      const key = `samples/${owner}/files/${randomUUID()}/${body.sha256}`;
       return { status: 200, data: { objectKey: key, ...(await objects.uploadUrl(key, body.sha256, body.size)) } };
     }
     if (path === '/api/files/download' && method === 'POST') {
@@ -100,25 +102,37 @@ export function createMailApi({ heads, objects }) {
     if (path !== '/api/state') return { status: 404, data: { error: 'Live email delivery is not connected' } };
     if (method === 'GET') {
       const snapshot = await current(owner), head = snapshot.head;
-      return { status: 200, data: head ? { revision: head.revision, digest: head.digest, state: snapshot.state } : { revision: 0, state: seedState() } };
+      return { status: 200, data: head ? { revision: head.revision, digest: digest(JSON.stringify(snapshot.state)), state: snapshot.state } : { revision: 0, state: withoutDeleted(seedState(), await heads.tombstones(owner)) } };
     }
     requireThat(method === 'PUT', 'Method not allowed', 405);
     requireThat(Number.isSafeInteger(body?.revision) && body.revision >= 0 && /^[a-zA-Z0-9-]{16,80}$/.test(body.writeId || ''));
     validateState(body.state, owner);
     const text = JSON.stringify(body.state), sha = digest(text);
     requireThat(Buffer.byteLength(text) <= MAX_STATE_BYTES, 'The sample workspace is too large', 413);
-    const previous = await heads.get(owner);
+    const snapshot = await current(owner), previous = snapshot.head;
     if (previous?.writeId === body.writeId && previous.digest === sha) return { status: 200, data: { revision: previous.revision } };
     requireThat((previous?.revision || 0) === body.revision, 'Newer changes were saved on another device. Your unsaved copy is kept in this browser.', 409);
-    for (const file of new Map(fileReferences(body.state).map(file => [file.objectKey, file])).values()) {
+    const blocked = new Set((await heads.tombstones(owner)).map(entryKey));
+    requireThat(!entries(body.state).some(entry => blocked.has(entryKey(entry))), 'This copy includes permanently deleted mail. Reload the shared workspace.', 409);
+    const candidates = new Map(fileReferences(body.state).map(file => [file.objectKey, file]));
+    const retiredFiles = candidates.size ? new Set((await heads.retired(owner)).map(item => item.objectKey)) : new Set();
+    for (const file of candidates.values()) {
+      requireThat(!retiredFiles.has(file.objectKey), 'An attachment was retired. Reattach its file before saving.', 409);
       const stored = await objects.head(file.objectKey);
       requireThat(stored.size === file.size && stored.sha256 === file.sha256, 'An attachment upload is incomplete');
     }
     const key = `samples/${owner}/states/${randomUUID()}.json`;
-    await objects.write(key, text);
     const next = { objectKey: key, digest: sha, revision: body.revision + 1, writeId: body.writeId };
     // An unknown commit outcome must leave the object intact: it may be live.
-    const accepted = await heads.compareAndSwap(owner, body.revision, next);
+    const retainedFiles = fileKeys(body.state), oldFiles = snapshot.state ? fileKeys(snapshot.state) : new Set();
+    const changes = {
+      deletions: snapshot.state ? deletionChanges(snapshot.state, body.state) : [], candidateEntries: entries(body.state), candidateFiles: [...retainedFiles],
+      retirements: [...(previous ? [{ ...retirement(previous.objectKey, 'state', now()), digest: previous.digest }] : []), ...[...oldFiles].filter(key => !retainedFiles.has(key)).map(key => retirement(key, 'file', now()))],
+      at: new Date(now()).toISOString(),
+    };
+    requireThat(changes.deletions.length + changes.retirements.length <= 2000, 'Make this change in smaller batches.', 413);
+    await objects.write(key, text);
+    const accepted = await heads.compareAndSwap(owner, body.revision, next, changes);
     if (!accepted) { await objects.remove(key).catch(() => {}); throw new MailError(409, 'Another device saved first. Your unsaved copy is kept in this browser.'); }
     // Deleting an old immutable key makes its version noncurrent. Never expire the live head.
     if (previous) await objects.remove(previous.objectKey).catch(() => {});

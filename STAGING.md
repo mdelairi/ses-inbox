@@ -1,6 +1,6 @@
 # Private staging release
 
-**Live and verified October 27, 2026:** [Open the staging inbox](https://stage.example.com). Sign in as `owner@example.net`.
+**Live and verified October 27, 2026; retention release October 28, 2026:** [Open the staging inbox](https://stage.example.com). Sign in as `owner@example.net`.
 
 Deployed using the installed Agent Toolkit for AWS skills and their documented CLI fallback. The certificate, private release storage, authentication service, CloudFront distribution, and shared sample-data storage are deployed. This release contains sample mail only; it cannot send real email. Current resource identifiers and release checksum are recorded in `stage/config.json` and `stage/deployment.json`.
 
@@ -38,7 +38,7 @@ The small Secrets Manager secret is the main fixed staging component; Lambda, Dy
 ## Validation and deployed state
 
 - All four stacks completed: `project-inbox-stage-artifacts`, `project-inbox-stage-certificate`, `project-inbox-stage-storage`, and `project-inbox-stage-app`. CloudFront `E1EXAMPLE00003` is enabled and reports `Deployed`.
-- `npm test`: 30 passing model/authentication/infrastructure/shared-API checks. `npm run stage:test`: 3 passing tests of real RSA-signed token verification, signature tampering, issuer/audience, expiry, nonce requirements, and authorized party.
+- `npm test`: 38 passing model/authentication/infrastructure/shared-API/retention checks (30 at the October 27 deployment; 8 retention and maintenance-store checks were added for the October 28 retention release). `npm run stage:test`: 3 passing tests of real RSA-signed token verification, signature tampering, issuer/audience, expiry, nonce requirements, and authorized party.
 - Four isolated staging browser journeys pass: the protected UI and rich message frame render under the deployed CSP, address tabs keep mail separate, phone layout fits, logout revokes the simulated server session, and signed-out requests cannot read application/fixture modules. The shared journey also checks alias edits, draft text, attachment and inline-image transfer across independent browsers, stale-save rejection, and recovery download while the composer stays open. These browser journeys mock AWS persistence; they complement the live integration checks below.
 - Native Chrome live checks passed: Google owner login, immutable Google subject enrollment, repeat login with that pinned identity, complete app loading, workspace switching, separate info/support mailboxes, a fixed support sender, and server sign-out. The owner is the sole Google OAuth test user. No second real Google account was used; wrong-account rejection is covered by the handler tests and the Google test-user restriction.
 - Live HTTPS checks: root redirects to `/signin`; unsigned requests to `/app.mjs` return 401; the direct AWS_IAM Lambda URL returns 403. Responses include no-store, CSP, HSTS, referrer, and anti-framing headers. No application errors appeared in the stage error log during the checks.
@@ -102,7 +102,7 @@ Copy `stage/entry.mjs` to `.audit/stage-entry.js` before this command, preservin
 6. On the actual hosted endpoint, verify that unsigned origin requests fail, every asset rejects a signed-out browser, another Google account is denied, owner login works, nonce/state replays fail, sessions/logout work, aliases stay separate, staging colours match, and phone layout/rich messages work under the deployed CSP. Confirm the old localhost state remains independent and `/api/send` cannot send mail.
 7. Roll back by restoring the previous immutable artifact key or disabling this distribution. Retain the auth table and owner pin. To stop usage, disable the distribution and revoke sessions; deletion of retained resources is a separately reviewed cleanup, not an automatic rollback step.
 
-Production SES receiving, real sent capture, guaranteed deletion/recovery cleanup, the relational mail repository/server search, and iPhone background push remain outside this sample-stage release.
+Production SES receiving, real sent capture, a verified production deletion/recovery guarantee, the relational mail repository/server search, and iPhone background push remain outside this sample-stage release.
 
 The production storage design is specified in [BACKEND_STORAGE.md](BACKEND_STORAGE.md). A separately approved disposable DSQL benchmark tests its schema/search primitives; [results and cleanup](planning/STORAGE_BENCHMARK.md) are recorded independently of this deployment. That earlier experiment is independent of the retained shared-sample storage described below.
 
@@ -110,13 +110,47 @@ The production storage design is specified in [BACKEND_STORAGE.md](BACKEND_STORA
 
 - Bucket: `project-inbox-stage-storage-mail-EXAMPLE` (private, AES256, versioned, TLS-only, CORS restricted to the exact stage origin).
 - Database: `exampleclusterstage0000000`, single-region `us-east-1`, AWS-owned encryption and deletion protection. Retained with the bucket on stack replacement/deletion.
-- Runtime role: `inbox_stage`, mapped only to the existing staging Lambda role, with SELECT/INSERT/UPDATE on `inbox_stage.workspace`. Administrative setup is isolated in `scripts/init-stage-storage.mjs` and is not bundled into the Lambda.
+- Runtime role: `inbox_stage`, mapped only to the existing staging Lambda role, with SELECT/INSERT/UPDATE on `inbox_stage.workspace` and SELECT/INSERT on `inbox_stage.tombstones` and `inbox_stage.retired_objects`. It cannot delete retirement records. Administrative setup is isolated in `scripts/init-stage-storage.mjs` and is not bundled into the Lambda.
 - `stage/mail-api.mjs` validates sample workspace records, fixed draft sender identity, file ownership/size/checksum, and optimistic workspace revisions. A stale save receives HTTP 409; an uncertain database outcome never deletes a potentially published state object. Repeating the same confirmed write is idempotent.
 - `stage/mail-store.mjs` uses the official DSQL Node connector and verified TLS. State is read through the authenticated API with a bounded retry if a concurrent save retires the prior object. File transfers use owner-authorized URLs valid for 60 seconds. Uploads require SHA-256 checksum and expected size; downloads require a current workspace reference. Previously issued URLs can remain valid until expiry.
 - `stage/storage-client.mjs` replaces only the hosted persistence adapter. Navigation remains per tab. Shared mail/alias/preferences/draft changes are saved on the server; attachments and inline images round-trip through private S3. Refresh/reload retrieves the current shared state. Keep the page open until “Saved to shared workspace” appears.
 - IndexedDB retains an unsaved recovery copy before uploads/saves. Network failures and stale writes keep that copy. Recovery controls are reachable inside an open composer, with a JSON download and an explicitly confirmed “Use shared version” action. There is no silent conflict overwrite or automatic merging of unrelated edits.
 - The stage bridge supports two configured domains, up to 1,000 messages/drafts, 2 MiB metadata, 10 MiB per file, 20 MiB per message, and 100 MiB of referenced attachments. It is for sample review rather than a growing real archive.
-- Superseded state objects are deleted after successful publication, leaving private noncurrent recovery versions subject to the 30-day lifecycle. Current state never expires. Orphan/removed attachment collection, recovery import, verified restore/replay, and a strict physical deletion deadline are **not implemented**; no production retention guarantee is claimed. Keep real email disconnected until those are delivered.
+- Superseded state objects are deleted after successful publication, leaving private noncurrent recovery versions. Current state never expires. In the deployed October 27 release, noncurrent versions follow a 30-day S3 lifecycle and nothing else removes them.
+
+### Retention and recovery (deployed October 28, 2026)
+
+Release `7644d5db…` runs the app and the cleanup Lambda. The hourly schedule is enabled. Live verification:
+- A first manual cleanup run reported `CleanupSuccess` with no deadline breaches.
+- `scripts/test-shared-stage.mjs` passed all 11 checks against the new code.
+- Removing its synthetic draft wrote a tombstone and recorded the two replaced states and the attachment as retired, due for purge 29 days later.
+
+**Operator recovery role.** DSQL refused `inbox_maintenance` connections from the owner's IAM Identity Center role, whether the grant used the SSO role ARN with or without its `/aws-reserved/sso.amazonaws.com/` path, even though IAM allowed `dsql:DbConnect`. The app stack therefore has a path-less `RecoveryRole`:
+- Only the account's `AWSReservedSSO_AdministratorAccess_*` role can assume it.
+- It can `dsql:DbConnect`, list `samples/*` versions, and Get, GetVersion and Put `samples/*` objects. It has no delete or admin permission.
+- Storage init maps it to `inbox_maintenance` and revokes any other mapping except the cleanup Lambda's role.
+- `scripts/recover-stage.mjs` assumes it for 15 minutes. Listing and a dry run against a live retired version were verified on October 28.
+
+- **Permanent deletion ledger.** Each save that drops a mailbox entry or draft writes a content-free tombstone in `inbox_stage.tombstones`, in the same compare-and-swap as the new revision head. Reads filter tombstoned entries, and a save that reintroduces one is rejected with HTTP 409, so a stale device or older snapshot cannot resurrect deleted mail. Deleting one alias's copy leaves other aliases' copies intact.
+- **Retirement records.** The replaced state object and every attachment no longer referenced are recorded in `inbox_stage.retired_objects` with `purge_after` set 29 days later. A save that references a retired attachment is rejected; the user must reattach the file. Uploads now use a fresh `files/<uuid>/<sha256>` key, so a re-uploaded file never collides with a retired one.
+- **Hourly cleanup** (`stage/maintenance.mjs`, Lambda `…-maintenance`). Per owner it takes a maintenance lock in the workspace row, then runs the steps below. Saves made while the lock is held get HTTP 503 and should be retried. A lock left by a timed-out run can be reclaimed after 15 minutes. The steps:
+  - never deletes the live head or a file it references, even in Trash/Spam;
+  - purges noncurrent versions of live keys older than 29 days;
+  - records unreferenced objects without a retirement record as orphans after a one-day grace period, aged from their creation;
+  - after `purge_after`, deletes every version (data first, delete markers last) and forgets the record only once a listing confirms none remain.
+  
+  It emits `ProjectInbox/Retention` metrics. Alarms fire on any failure, and when two hourly successes are missed. `DeadlineBreaches` counts versions still present a day after their deadline. Failed invocations go to an SQS dead-letter queue.
+- **S3 lifecycle** is now 29 noncurrent days as a backstop. Lifecycle expiry is asynchronous; the cleanup job is what enforces the deadline.
+- **Maintenance role.** A separate IAM role with `dsql:DbConnect`, `s3:ListBucketVersions` on `samples/*`, Get/Delete/DeleteVersion on `samples/*` objects, its own log group, and its dead-letter queue. It maps to the DSQL role `inbox_maintenance`, which has SELECT/UPDATE on `workspace`, SELECT on `tombstones`, and SELECT/INSERT/DELETE on `retired_objects`. The application Lambda role is unchanged and still has no object-version permission.
+- **Recovery** (`recoverMissing` in `stage/maintenance.mjs`) restores entries from a retired state version that is still inside its window and verifies its recorded digest. It is additive: it never removes current edits, re-applies the tombstone ledger, copies restored files to fresh keys, and requires an expected revision. It reports a dry run by default. Repairing an unreadable current snapshot needs an explicit flag. Run it with `scripts/recover-stage.mjs`, which assumes `RecoveryRole` from the `example-staging` profile:
+
+  ```sh
+  node scripts/recover-stage.mjs                                  # list recoverable versions
+  node scripts/recover-stage.mjs --object-key K --version-id V    # dry run
+  node scripts/recover-stage.mjs --object-key K --version-id V --apply --expected-revision N
+  ```
+  The dry run and the restore each hold the maintenance lock briefly, so saves from the app may need a retry.
+- **Not covered:** this is a sample-stage mechanism. A verified restore drill and a production retention guarantee are still required before real email is connected.
 
 Live integration evidence is in `stage/shared-checks.json`. The check used a temporary in-memory owner session, verified the pinned owner, exercised real CloudFront/Lambda/DSQL/S3 saves, checksum-protected state/file reads, stale-write rejection, and denial of new download links for removed files. It removed only its uniquely identified synthetic draft/file and revoked its test session. No owner session token, signed URL, or message content is written to the evidence file. The hosted shared inbox was also opened successfully in the owner’s existing Chrome session.
 
@@ -128,4 +162,14 @@ NODE_EXTRA_CA_CERTS=/etc/ssl/cert.pem node scripts/test-shared-stage.mjs
 
 The check uses the existing staging administrator profile to create and explicitly revoke a ten-minute test session; it does not change the pinned owner, Google credential, production resources, or mail routing. Do not run it against another account or host.
 
-For a storage update, create/review the storage-stack change set first, initialize its scoped schema, then package the app and pass `MailBucket`, `MailDatabaseHost`, and `MailDatabaseArn` alongside the existing application parameters. Review resource replacements and `describe-events` findings before execution. Roll back the application using its previous immutable artifact/template; retain shared data and the owner pin. Older releases ignore shared storage and show their original browser-only sample data.
+For a storage update, create/review the storage-stack change set first, initialize its scoped schema, then package the app and pass `MailBucket`, `MailDatabaseHost`, and `MailDatabaseArn` alongside the existing application parameters. Review resource replacements and `describe-events` findings before execution.
+
+To deploy the retention release:
+1. Update the storage stack for the 29-day lifecycle.
+2. Upload the release ZIP. Update the application stack with `MaintenanceArtifactKey` set to the new release key, `EnableCleanup=false`, and **`ArtifactKey` left at its previous value**. The maintenance function and schedule are created but disabled, and the live app keeps its current code.
+3. Re-run `scripts/init-stage-storage.mjs`, which adds the columns, tables, roles, and the `inbox_maintenance` mappings. It needs the `MaintenanceRole` from step 2.
+4. Only now update `ArtifactKey` to the new release. The new app code reads the tables and columns created in step 3, so switching it earlier would fail live saves. The old code keeps working against the extended schema.
+5. Invoke the maintenance function once manually, review its metrics and logs, and run `node scripts/test-shared-stage.mjs`.
+6. Set `EnableCleanup=true` through a reviewed change set.
+
+Roll back the application using its previous immutable artifact/template; retain shared data and the owner pin. Older releases ignore shared storage and show their original browser-only sample data.

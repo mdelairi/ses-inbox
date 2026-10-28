@@ -8,7 +8,7 @@ const types = { html: 'text/html', mjs: 'text/javascript', css: 'text/css', svg:
 const storageOrigin = 'https://inbox-sample-test.s3.us-east-1.amazonaws.com';
 function sharedBackend() {
   const heads = new Map(), objects = new Map();
-  const api = createMailApi({ heads: { get: async key => heads.get(key), compareAndSwap: async (key, revision, next) => { if ((heads.get(key)?.revision || 0) !== revision) return false; heads.set(key, next); return true; } }, objects: {
+  const api = createMailApi({ heads: { tombstones: async () => [], retired: async () => [], get: async key => heads.get(key), compareAndSwap: async (key, revision, next) => { if ((heads.get(key)?.revision || 0) !== revision) return false; heads.set(key, next); return true; } }, objects: {
     read: async key => objects.get(key).body.toString(), write: async (key, value) => objects.set(key, { body: Buffer.from(value) }), remove: async key => objects.delete(key),
     downloadUrl: async key => `${storageOrigin}/${key}`, head: async key => ({ size: objects.get(key)?.body.length, sha256: objects.get(key)?.sha256 }),
     uploadUrl: async (key, sha256) => ({ url: `${storageOrigin}/${key}`, headers: { 'content-type': 'application/octet-stream', 'x-inbox-sha256': sha256 } }),

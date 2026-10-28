@@ -11,9 +11,10 @@ catch { console.error('Not packaged: install stage dependencies and retain stage
 const { build } = await import(requireStage.resolve('esbuild'));
 await mkdir(new URL('lambda/', output), { recursive: true });
 await build({ entryPoints: [fileURLToPath(new URL('stage/entry.mjs', root))], outfile: fileURLToPath(new URL('lambda/index.mjs', output)), bundle: true, platform: 'node', target: 'node24', format: 'esm', banner: { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' } });
+await build({ entryPoints: [fileURLToPath(new URL('stage/maintenance-entry.mjs', root))], outfile: fileURLToPath(new URL('lambda/maintenance.mjs', output)), bundle: true, platform: 'node', target: 'node24', format: 'esm', banner: { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' } });
 await cp(new URL('assets/', output), new URL('lambda/assets/', output), { recursive: true });
 await cp(new URL('assets-manifest.json', output), new URL('lambda/assets-manifest.json', output));
-execFileSync('zip', ['-q', '-r', '../lambda.zip', 'index.mjs', 'assets-manifest.json', 'assets'], { cwd: fileURLToPath(new URL('lambda/', output)) });
+execFileSync('zip', ['-q', '-r', '../lambda.zip', 'index.mjs', 'maintenance.mjs', 'assets-manifest.json', 'assets'], { cwd: fileURLToPath(new URL('lambda/', output)) });
 const bytes = await readFile(new URL('lambda.zip', output));
 const manifest = JSON.parse(await readFile(new URL('release.json', output)));
 manifest.authenticationBundleBuilt = true;

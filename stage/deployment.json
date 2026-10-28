@@ -1,6 +1,6 @@
 {
   "environment": "staging",
-  "verifiedOn": "2026-10-27",
+  "verifiedOn": "2026-10-28",
   "url": "https://stage.example.com",
   "accountId": "222222222222",
   "region": "us-east-1",
@@ -13,8 +13,8 @@
   "distributionId": "E1EXAMPLE00003",
   "distributionDomain": "d1example00000.cloudfront.net",
   "authTable": "project-inbox-stage-app-Sessions-EXAMPLE",
-  "artifactKey": "releases/2af5646712407dbf5e4e95993f654a5e5740bc7b335a2fff9e9890b0e1a2da52/lambda.zip",
-  "lambdaSha256": "2af5646712407dbf5e4e95993f654a5e5740bc7b335a2fff9e9890b0e1a2da52",
+  "artifactKey": "releases/7644d5dbe7fd1d01a9af45c75df3f66d74f5611713efe1297301e9c955940b44/lambda.zip",
+  "lambdaSha256": "7644d5dbe7fd1d01a9af45c75df3f66d74f5611713efe1297301e9c955940b44",
   "checks": {
     "ownerGoogleLogin": true,
     "signedOutAssetProtection": true,
@@ -26,10 +26,16 @@
     "staleSaveRejected": true,
     "testSessionRevoked": true,
     "nativeSharedInboxRendered": true,
-    "snapshotReadRaceCovered": true
+    "snapshotReadRaceCovered": true,
+    "sharedStorageLiveCheck": true,
+    "deletionTombstoneRecorded": true,
+    "retirementRecorded": true,
+    "manualCleanupRun": true
   },
-  "releaseId": "c4e68127ff8a0cca8ebd5a533e205675f7611b917fdf7683f0bf8c7719d3cefb",
+  "releaseId": "cbe8239e48a8f7a0e5de317a42da528d83dd489950733f58616e609b1bcfeade",
   "scope": "shared-sample-prototype",
   "mailBucket": "project-inbox-stage-storage-mail-EXAMPLE",
-  "mailDatabaseId": "exampleclusterstage0000000"
+  "mailDatabaseId": "exampleclusterstage0000000",
+  "maintenanceFunction": "project-inbox-stage-app-maintenance",
+  "cleanupScheduleEnabled": true
 }
