@@ -121,3 +121,14 @@ export async function recoverMissing({ heads, objects, owner, objectKey, version
     report.applied = true; report.revision = next.revision; return report;
   } finally { await heads.release(owner, token); }
 }
+
+// Read-only: retired state versions still inside their recovery window, newest first.
+export async function listRecoverable({ heads, objects, owner, now = Date.now() }) {
+  if (!/^[a-f0-9]{64}$/.test(owner)) throw new Error('InvalidRecoveryOwner');
+  const sources = (await heads.retired(owner)).filter(item => item.kind === 'state' && item.digest && objectKind(owner, item.objectKey) === 'state' && now < +new Date(item.purgeAfter));
+  const result = [];
+  for (const item of sources) for (const version of await objects.versions(owner, item.objectKey)) {
+    if (!version.deleteMarker) result.push({ objectKey: item.objectKey, versionId: version.versionId, retiredAt: item.retiredAt, purgeAfter: item.purgeAfter });
+  }
+  return result.sort((a, b) => b.retiredAt.localeCompare(a.retiredAt));
+}

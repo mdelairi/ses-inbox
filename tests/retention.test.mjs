@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { seedState } from '../web/fixtures.mjs';
 import { createMailApi } from '../stage/mail-api.mjs';
 import { DAY, hash, fileKeys } from '../stage/retention.mjs';
-import { reconcileOwner, recoverMissing } from '../stage/maintenance.mjs';
+import { listRecoverable, reconcileOwner, recoverMissing } from '../stage/maintenance.mjs';
 import { memoryStore } from './helpers/retention-memory.mjs';
 
 async function fixture() {
@@ -70,6 +70,17 @@ test('failed purge keeps its retirement fence and retry completes without touchi
   assert.equal((await f.heads.get(f.owner)).maintenanceToken, null);
   f.objects.purge = purge; await reconcileOwner({ ...f, now: f.now() + 30 * DAY });
   assert.equal((await f.objects.versions(f.owner, f.key)).length, 0);
+});
+test('recoverable versions list only retired states inside their window', async () => {
+  const f = await fixture();
+  assert.deepEqual(await listRecoverable({ ...f, now: f.now() }), []);
+  f.state.messages = []; await f.save(f.state, 1);
+  const [source, ...rest] = await listRecoverable({ ...f, now: f.now() + DAY });
+  assert.deepEqual(rest, []);
+  assert.equal(source.objectKey, f.original.objectKey); assert.equal(source.versionId, f.versionId);
+  assert.ok(!(await listRecoverable({ ...f, now: f.now() + DAY })).some(item => item.objectKey === f.key));
+  assert.deepEqual(await listRecoverable({ ...f, now: f.now() + 29 * DAY }), []);
+  await assert.rejects(listRecoverable({ ...f, owner: 'not-an-owner' }), /InvalidRecoveryOwner/);
 });
 test('cleanup lock blocks publication and cross-owner recovery is rejected', async () => {
   const f = await fixture(); await f.heads.claim(f.owner, 'held');

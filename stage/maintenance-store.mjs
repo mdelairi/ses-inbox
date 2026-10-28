@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, paginateListObjectVersions } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import { AuroraDSQLPool } from '@aws/aurora-dsql-node-postgres-connector';
 import { createHeads } from './retention-store.mjs';
 import { scopedKey } from './retention.mjs';
@@ -18,15 +18,18 @@ export function createMaintenanceStore({ bucket, host, region, profile, user = '
     async purge(Key, VersionId) { if (!VersionId) throw new Error('MissingPurgeVersion'); await send(new DeleteObjectCommand({ Bucket: bucket, Key, VersionId })); },
     async versions(owner, exactKey) {
       if (!/^[a-f0-9]{64}$/.test(owner) || (exactKey && !scopedKey(owner, exactKey))) throw new Error('InvalidVersionScope');
-      const result = []; let pages = 0;
-      for await (const page of paginateListObjectVersions({ client: s3 }, { Bucket: bucket, Prefix: exactKey || `samples/${owner}/`, MaxKeys: 1000 })) {
+      // client-s3 has no ListObjectVersions paginator; follow the key/version markers.
+      const result = []; let pages = 0, KeyMarker, VersionIdMarker, page;
+      do {
         if (++pages > 100) throw new Error('VersionListingLimit');
+        page = await send(new ListObjectVersionsCommand({ Bucket: bucket, Prefix: exactKey || `samples/${owner}/`, MaxKeys: 1000, KeyMarker, VersionIdMarker }));
         for (const [items, deleteMarker] of [[page.Versions || [], false], [page.DeleteMarkers || [], true]]) for (const item of items) {
           if (exactKey && item.Key !== exactKey) continue;
           if (!scopedKey(owner, item.Key)) throw new Error('VersionScopeMismatch');
           result.push({ objectKey: item.Key, versionId: item.VersionId, isLatest: item.IsLatest, deleteMarker, lastModified: item.LastModified.toISOString() });
         }
-      }
+        ({ NextKeyMarker: KeyMarker, NextVersionIdMarker: VersionIdMarker } = page);
+      } while (page.IsTruncated);
       return result;
     },
   };
