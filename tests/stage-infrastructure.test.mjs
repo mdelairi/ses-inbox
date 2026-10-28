@@ -17,6 +17,15 @@ test('stage has no real-mail resources or permissions, defaults disabled, and re
   const sample = JSON.stringify(resources.AppRole.Properties.Policies[1]);
   assert.match(sample, /dsql:DbConnect/); assert.doesNotMatch(sample, /DbConnectAdmin|ses:|iam:/);
 });
+test('recovery role is path-less, owner-assumed only, and cannot delete or administer', () => {
+  const role = applicationTemplate().Resources.RecoveryRole.Properties;
+  assert.equal(role.Path, '/');
+  const [trust] = role.AssumeRolePolicyDocument.Statement;
+  assert.match(trust.Condition.ArnLike['aws:PrincipalArn']['Fn::Sub'], /role\/aws-reserved\/sso\.amazonaws\.com\/AWSReservedSSO_AdministratorAccess_\*$/);
+  const policy = JSON.stringify(role.Policies);
+  assert.match(policy, /dsql:DbConnect"/); assert.match(policy, /s3:GetObjectVersion/);
+  assert.doesNotMatch(policy, /Delete|DbConnectAdmin|ses:|iam:|"\*"/);
+});
 test('all CloudFront requests reach the auth gateway with no cached auth responses', () => {
   const config = applicationTemplate().Resources.Distribution.Properties.DistributionConfig;
   assert.equal(config.DefaultCacheBehavior.CachePolicyId, '4135ea2d-6df8-44a3-9df3-4b5a84be39ad');

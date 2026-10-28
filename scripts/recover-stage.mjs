@@ -2,6 +2,7 @@
 // inbox_maintenance database role, never admin. Dry run unless --apply is given.
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { parseArgs } from 'node:util';
 import { createMaintenanceStore } from '../stage/maintenance-store.mjs';
 import { listRecoverable, recoverMissing } from '../stage/maintenance.mjs';
@@ -19,7 +20,13 @@ if (args.apply && !/^\d+$/.test(args['expected-revision'] || '')) throw new Erro
 const config = JSON.parse(await readFile(new URL('../stage/config.json', import.meta.url)));
 const identity = JSON.parse(execFileSync('aws', ['sts', 'get-caller-identity', '--profile', config.profile, '--output', 'json'], { encoding: 'utf8' }));
 if (identity.Account !== config.accountId) throw new Error('Wrong staging account');
-const store = createMaintenanceStore({ bucket: config.mailBucket, host: config.mailDatabaseHost, region: config.region, profile: config.profile });
+// DSQL rejects path-qualified SSO roles, so assume the stack's path-less RecoveryRole.
+const aws = args => JSON.parse(execFileSync('aws', [...args, '--profile', config.profile, '--region', config.region, '--output', 'json'], { encoding: 'utf8' }));
+const recovery = aws(['cloudformation', 'describe-stack-resource', '--stack-name', `${config.stackPrefix}-app`, '--logical-resource-id', 'RecoveryRole']).StackResourceDetail;
+const RoleArn = aws(['iam', 'get-role', '--role-name', recovery.PhysicalResourceId]).Role.Arn;
+const { fromIni, fromTemporaryCredentials } = createRequire(new URL('../stage/package.json', import.meta.url))('@aws-sdk/credential-providers');
+const credentials = fromTemporaryCredentials({ masterCredentials: fromIni({ profile: config.profile }), params: { RoleArn, RoleSessionName: 'inbox-recovery', DurationSeconds: 900 }, clientConfig: { region: config.region } });
+const store = createMaintenanceStore({ bucket: config.mailBucket, host: config.mailDatabaseHost, region: config.region, credentials });
 try {
   const owners = await store.heads.owners();
   const owner = args.owner || (owners.length === 1 ? owners[0] : undefined);

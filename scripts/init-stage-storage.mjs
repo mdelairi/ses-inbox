@@ -40,17 +40,14 @@ try {
   const maintenance = aws(['cloudformation', 'describe-stack-resource', '--stack-name', `${config.stackPrefix}-app`, '--logical-resource-id', 'MaintenanceRole']).StackResourceDetail;
   const maintenanceRole = aws(['iam', 'get-role', '--role-name', maintenance.PhysicalResourceId]).Role.Arn;
   await client.query(`AWS IAM GRANT inbox_maintenance TO ${escapeLiteral(maintenanceRole)}`);
-  // The owner uses this scoped database role for explicit recovery tools, not admin.
-  const actor = aws(['sts', 'get-caller-identity']).Arn;
-  const actorRole = actor.match(/^arn:aws:sts::[0-9]+:assumed-role\/([^/]+)\//)?.[1];
-  if (!actorRole) throw new Error('Recovery operator must use the existing staging role');
-  const actorArn = aws(['iam', 'get-role', '--role-name', actorRole]).Role.Arn;
-  // DSQL matches the session's assumed-role ARN, which omits IAM paths such as
-  // SSO's /aws-reserved/sso.amazonaws.com/; a mapping with the path never matches.
-  const sessionArn = `arn:aws:iam::${config.accountId}:role/${actorRole}`;
-  const mapped = (await client.query('SELECT arn FROM sys.iam_pg_role_mappings WHERE pg_role_name=$1', ['inbox_maintenance'])).rows.map(row => row.arn);
-  if (actorArn !== sessionArn && mapped.includes(actorArn)) await client.query(`AWS IAM REVOKE inbox_maintenance FROM ${escapeLiteral(actorArn)}`);
-  if (!mapped.includes(sessionArn)) await client.query(`AWS IAM GRANT inbox_maintenance TO ${escapeLiteral(sessionArn)}`);
+  // The owner assumes the path-less RecoveryRole for explicit recovery, not admin.
+  // Only the two stack roles may hold inbox_maintenance; earlier direct SSO-role grants are revoked.
+  const recovery = aws(['cloudformation', 'describe-stack-resource', '--stack-name', `${config.stackPrefix}-app`, '--logical-resource-id', 'RecoveryRole']).StackResourceDetail;
+  const recoveryRole = aws(['iam', 'get-role', '--role-name', recovery.PhysicalResourceId]).Role.Arn;
+  await client.query(`AWS IAM GRANT inbox_maintenance TO ${escapeLiteral(recoveryRole)}`);
+  for (const { arn } of (await client.query('SELECT arn FROM sys.iam_pg_role_mappings WHERE pg_role_name=$1', ['inbox_maintenance'])).rows) {
+    if (arn !== maintenanceRole && arn !== recoveryRole) await client.query(`AWS IAM REVOKE inbox_maintenance FROM ${escapeLiteral(arn)}`);
+  }
   console.log('Initialized isolated sample workspace schema and scoped runtime mapping.');
   console.log(JSON.stringify(outputs));
 } finally { await client.end(); }

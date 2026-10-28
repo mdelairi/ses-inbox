@@ -3,9 +3,9 @@ import { AuroraDSQLPool } from '@aws/aurora-dsql-node-postgres-connector';
 import { createHeads } from './retention-store.mjs';
 import { scopedKey } from './retention.mjs';
 
-export function createMaintenanceStore({ bucket, host, region, profile, user = 'inbox_maintenance' }) {
-  const s3 = new S3Client({ region, maxAttempts: 2, ...(profile ? { profile } : {}) });
-  const pool = new AuroraDSQLPool({ host, region, user, ...(profile ? { profile } : {}), max: 2, idleTimeoutMillis: 10000, connectionTimeoutMillis: 5000, maxLifetimeSeconds: 300, ssl: { rejectUnauthorized: true } });
+export function createMaintenanceStore({ bucket, host, region, profile, credentials, user = 'inbox_maintenance' }) {
+  const s3 = new S3Client({ region, maxAttempts: 2, ...(profile ? { profile } : {}), ...(credentials ? { credentials } : {}) });
+  const pool = new AuroraDSQLPool({ host, region, user, ...(profile ? { profile } : {}), ...(credentials ? { customCredentialsProvider: credentials } : {}), max: 2, idleTimeoutMillis: 10000, connectionTimeoutMillis: 5000, maxLifetimeSeconds: 300, ssl: { rejectUnauthorized: true } });
   pool.on('error', () => {});
   const send = command => s3.send(command, { abortSignal: AbortSignal.timeout(20000) });
   const objects = {
