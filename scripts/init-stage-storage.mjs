@@ -45,7 +45,12 @@ try {
   const actorRole = actor.match(/^arn:aws:sts::[0-9]+:assumed-role\/([^/]+)\//)?.[1];
   if (!actorRole) throw new Error('Recovery operator must use the existing staging role');
   const actorArn = aws(['iam', 'get-role', '--role-name', actorRole]).Role.Arn;
-  await client.query(`AWS IAM GRANT inbox_maintenance TO ${escapeLiteral(actorArn)}`);
+  // DSQL matches the session's assumed-role ARN, which omits IAM paths such as
+  // SSO's /aws-reserved/sso.amazonaws.com/; a mapping with the path never matches.
+  const sessionArn = `arn:aws:iam::${config.accountId}:role/${actorRole}`;
+  const mapped = (await client.query('SELECT arn FROM sys.iam_pg_role_mappings WHERE pg_role_name=$1', ['inbox_maintenance'])).rows.map(row => row.arn);
+  if (actorArn !== sessionArn && mapped.includes(actorArn)) await client.query(`AWS IAM REVOKE inbox_maintenance FROM ${escapeLiteral(actorArn)}`);
+  if (!mapped.includes(sessionArn)) await client.query(`AWS IAM GRANT inbox_maintenance TO ${escapeLiteral(sessionArn)}`);
   console.log('Initialized isolated sample workspace schema and scoped runtime mapping.');
   console.log(JSON.stringify(outputs));
 } finally { await client.end(); }

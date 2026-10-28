@@ -57,7 +57,7 @@ The private sample-only staging release is live at [stage.example.com](https://s
 
 The hosted sample stage persists drafts, aliases, mailbox state, attached files, and inline images across devices. Create a draft, wait for “Saved to shared workspace,” then open the same mailbox’s Drafts on another signed-in device. Use Refresh/reload to retrieve changes. Earlier browser-only samples are preserved separately and are not automatically imported.
 
-Source now also includes sample-stage retention: a permanent-deletion ledger that prevents resurrection, 29-day retirement of replaced states and attachments, an hourly cleanup Lambda with failure alarms, and an additive recovery function. This is **not yet deployed**; see [STAGING.md](STAGING.md#retention-and-recovery-implemented-in-source-not-yet-deployed).
+Source now also includes sample-stage retention: a permanent-deletion ledger that prevents resurrection, 29-day retirement of replaced states and attachments, an hourly cleanup Lambda with failure alarms, and an additive recovery function. It was deployed to staging on October 28, 2026; see [STAGING.md](STAGING.md#retention-and-recovery-deployed-october-28-2026).
 
 Production mail integration, real SES receiving/sending, automated project capture, the relational mail repository/server search, background iPhone push, and verified backups remain pending. Search in the shared sample stage still runs in the browser; the separate benchmark validates candidate DSQL query behavior, not complete production costs.
 

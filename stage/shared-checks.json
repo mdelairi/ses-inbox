@@ -1,7 +1,7 @@
 {
-  "verifiedAt": "2026-10-27T20:02:55.528Z",
+  "verifiedAt": "2026-10-28T04:56:24.783Z",
   "url": "https://stage.example.com",
-  "lambdaSha256": "2af5646712407dbf5e4e95993f654a5e5740bc7b335a2fff9e9890b0e1a2da52",
+  "lambdaSha256": "7644d5dbe7fd1d01a9af45c75df3f66d74f5611713efe1297301e9c955940b44",
   "checks": {
     "signedOutApiDenied": true,
     "pinnedOwnerVerified": true,

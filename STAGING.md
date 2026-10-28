@@ -1,6 +1,6 @@
 # Private staging release
 
-**Live and verified October 27, 2026:** [Open the staging inbox](https://stage.example.com). Sign in as `owner@example.net`.
+**Live and verified October 27, 2026; retention release October 28, 2026:** [Open the staging inbox](https://stage.example.com). Sign in as `owner@example.net`.
 
 Deployed using the installed Agent Toolkit for AWS skills and their documented CLI fallback. The certificate, private release storage, authentication service, CloudFront distribution, and shared sample-data storage are deployed. This release contains sample mail only; it cannot send real email. Current resource identifiers and release checksum are recorded in `stage/config.json` and `stage/deployment.json`.
 
@@ -38,7 +38,7 @@ The small Secrets Manager secret is the main fixed staging component; Lambda, Dy
 ## Validation and deployed state
 
 - All four stacks completed: `project-inbox-stage-artifacts`, `project-inbox-stage-certificate`, `project-inbox-stage-storage`, and `project-inbox-stage-app`. CloudFront `E1EXAMPLE00003` is enabled and reports `Deployed`.
-- `npm test`: 38 passing model/authentication/infrastructure/shared-API/retention checks (30 at the October 27 deployment; the 8 retention and maintenance-store checks cover source that is not yet deployed). `npm run stage:test`: 3 passing tests of real RSA-signed token verification, signature tampering, issuer/audience, expiry, nonce requirements, and authorized party.
+- `npm test`: 38 passing model/authentication/infrastructure/shared-API/retention checks (30 at the October 27 deployment; 8 retention and maintenance-store checks were added for the October 28 retention release). `npm run stage:test`: 3 passing tests of real RSA-signed token verification, signature tampering, issuer/audience, expiry, nonce requirements, and authorized party.
 - Four isolated staging browser journeys pass: the protected UI and rich message frame render under the deployed CSP, address tabs keep mail separate, phone layout fits, logout revokes the simulated server session, and signed-out requests cannot read application/fixture modules. The shared journey also checks alias edits, draft text, attachment and inline-image transfer across independent browsers, stale-save rejection, and recovery download while the composer stays open. These browser journeys mock AWS persistence; they complement the live integration checks below.
 - Native Chrome live checks passed: Google owner login, immutable Google subject enrollment, repeat login with that pinned identity, complete app loading, workspace switching, separate info/support mailboxes, a fixed support sender, and server sign-out. The owner is the sole Google OAuth test user. No second real Google account was used; wrong-account rejection is covered by the handler tests and the Google test-user restriction.
 - Live HTTPS checks: root redirects to `/signin`; unsigned requests to `/app.mjs` return 401; the direct AWS_IAM Lambda URL returns 403. Responses include no-store, CSP, HSTS, referrer, and anti-framing headers. No application errors appeared in the stage error log during the checks.
@@ -118,7 +118,14 @@ The production storage design is specified in [BACKEND_STORAGE.md](BACKEND_STORA
 - The stage bridge supports two configured domains, up to 1,000 messages/drafts, 2 MiB metadata, 10 MiB per file, 20 MiB per message, and 100 MiB of referenced attachments. It is for sample review rather than a growing real archive.
 - Superseded state objects are deleted after successful publication, leaving private noncurrent recovery versions. Current state never expires. In the deployed October 27 release, noncurrent versions follow a 30-day S3 lifecycle and nothing else removes them.
 
-### Retention and recovery (implemented in source, not yet deployed)
+### Retention and recovery (deployed October 28, 2026)
+
+Release `7644d5db…` runs the app and the cleanup Lambda. The hourly schedule is enabled. Live verification:
+- A first manual cleanup run reported `CleanupSuccess` with no deadline breaches.
+- `scripts/test-shared-stage.mjs` passed all 11 checks against the new code.
+- Removing its synthetic draft wrote a tombstone and recorded the two replaced states and the attachment as retired, due for purge 29 days later.
+
+**Known issue:** `scripts/recover-stage.mjs` cannot yet connect from the owner's IAM Identity Center role. DSQL refuses `inbox_maintenance` whether the grant uses the SSO role ARN with or without its `/aws-reserved/sso.amazonaws.com/` path, although IAM allows `dsql:DbConnect`. The cleanup Lambda's role, which has no path, connects normally. The planned fix is a dedicated path-less recovery role that the SSO session assumes.
 
 - **Permanent deletion ledger.** Each save that drops a mailbox entry or draft writes a content-free tombstone in `inbox_stage.tombstones`, in the same compare-and-swap as the new revision head. Reads filter tombstoned entries, and a save that reintroduces one is rejected with HTTP 409, so a stale device or older snapshot cannot resurrect deleted mail. Deleting one alias's copy leaves other aliases' copies intact.
 - **Retirement records.** The replaced state object and every attachment no longer referenced are recorded in `inbox_stage.retired_objects` with `purge_after` set 29 days later. A save that references a retired attachment is rejected; the user must reattach the file. Uploads now use a fresh `files/<uuid>/<sha256>` key, so a re-uploaded file never collides with a retired one.
