@@ -25,10 +25,10 @@
     "@aws-sdk/s3-presigned-post": "^3.0.0",
     "@aws-sdk/s3-request-presigner": "^3.0.0",
     "mailparser": "^3.7.0",
-    "nodemailer": "^7.0.0"
+    "nodemailer": "^10.2.1"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0",
-    "@playwright/test": "^1.55.0"
+    "@playwright/test": "^1.55.0",
+    "esbuild": "^0.25.0"
   }
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
-import MailComposer from 'nodemailer/lib/mail-composer/index.js';
+import MailComposer from 'nodemailer/lib/mail-composer';
 import { check, HttpError, FOLDERS, MAX_FILE_BYTES, MAX_TOTAL_BYTES, safeFilename, validateSend, metadata, summary, decodeCursor } from './core.mjs';
 import { getMail, putMail, updateMail, listMail, readObject, putObject, headObject, uploadForm, downloadUrl } from './storage.mjs';
 
