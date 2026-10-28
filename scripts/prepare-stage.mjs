@@ -19,7 +19,7 @@ await cp(new URL('stage/storage-client.mjs', root), localDb);
 const html = new URL('assets/index.html', output);
 await writeFile(html, (await readFile(html, 'utf8')).replace('<body>', '<body data-environment="staging">').replace('<script type="module" src="/app.mjs"></script>', '<script type="module" src="/stage-client.mjs"></script>\n  <script type="module" src="/app.mjs"></script>'));
 await cp(new URL('stage/client.mjs', root), new URL('assets/stage-client.mjs', output));
-for (const name of ['auth.mjs', 'entry.mjs', 'google.mjs', 'mail-api.mjs', 'mail-store.mjs', 'storage-client.mjs', 'package.json']) await cp(new URL(`stage/${name}`, root), new URL(`source/${name}`, output));
+for (const name of ['auth.mjs', 'entry.mjs', 'google.mjs', 'mail-api.mjs', 'mail-store.mjs', 'storage-client.mjs', 'retention.mjs', 'retention-store.mjs', 'maintenance.mjs', 'maintenance-store.mjs', 'maintenance-entry.mjs', 'package.json']) await cp(new URL(`stage/${name}`, root), new URL(`source/${name}`, output));
 try { await cp(new URL('stage/package-lock.json', root), new URL('source/package-lock.json', output)); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 const templates = { artifacts: artifactTemplate(), certificate: certificateTemplate(), storage: storageTemplate(), application: applicationTemplate() };
 for (const [name, template] of Object.entries(templates)) {

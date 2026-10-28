@@ -140,7 +140,9 @@ export async function persistState(state) {
   const wire = await encode(state), text = JSON.stringify(wire);
   if (text === baseline) { await recovery('delete'); recoveryId = undefined; dirty = false; return; }
   if (!lastAttempt || lastAttempt.text !== text) lastAttempt = { text, writeId: crypto.randomUUID() };
-  const result = await request('/api/state', 'PUT', { revision, writeId: lastAttempt.writeId, state: wire });
+  let result;
+  try { result = await request('/api/state', 'PUT', { revision, writeId: lastAttempt.writeId, state: wire }); }
+  catch (error) { if (error.status === 409 && error.message.includes('attachment was retired')) uploaded.clear(); throw error; }
   revision = result.revision; baseline = text; dirty = false; lastAttempt = undefined;
   const pending = await recovery('get'); if (pending?.id === recoveryId) await recovery('delete'); recoveryId = undefined;
 }

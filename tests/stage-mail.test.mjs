@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { createMailApi, validateState } from '../stage/mail-api.mjs';
 import { createStageHandler, hash, sessionCookie } from '../stage/auth.mjs';
 import { seedState } from '../web/fixtures.mjs';
+import { withoutDeleted } from '../stage/retention.mjs';
 
 const owner = hash('owner-sub');
 function setup() {
@@ -13,7 +14,7 @@ function setup() {
     async downloadUrl(key) { return `https://objects.invalid/${key}`; }, async head(key) { return { size: 3, sha256: key.split('/').at(-1) }; },
     async uploadUrl() { return { url: 'https://objects.invalid/upload', headers: {} }; },
   };
-  const heads = { async get(key) { return data.get(key); }, async compareAndSwap(key, revision, next) { if ((data.get(key)?.revision || 0) !== revision) return false; data.set(key, next); return true; } };
+  const heads = { tombstones: async () => [], retired: async () => [], async get(key) { return data.get(key); }, async compareAndSwap(key, revision, next) { if ((data.get(key)?.revision || 0) !== revision) return false; data.set(key, next); return true; } };
   return { api: createMailApi({ heads, objects }), data, blobs, objects, heads };
 }
 const save = (api, state, revision = 0, writeId = '12345678-1234-1234-1234-123456789abc') => api({ method: 'PUT', path: '/api/state', sub: 'owner-sub', body: { revision, writeId, state } });
@@ -21,7 +22,7 @@ test('shared state persists and stale devices cannot replace newer data; retry i
   const { api, data, blobs } = setup(), state = seedState();
   assert.equal((await save(api, state)).data.revision, 1);
   const read = await api({ method: 'GET', path: '/api/state', sub: 'owner-sub' });
-  assert.equal(read.data.revision, 1); assert.deepEqual(read.data.state, state);
+  assert.equal(read.data.revision, 1); assert.deepEqual(read.data.state, withoutDeleted(state, []));
   assert.equal((await save(api, state)).data.revision, 1);
   await assert.rejects(save(api, { ...state, drafts: [] }, 0, 'different-write-123456'), { status: 409 });
   assert.equal(data.get(owner).revision, 1); assert.equal(blobs.size, 1);
