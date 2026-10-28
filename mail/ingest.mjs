@@ -6,6 +6,20 @@ const sha256 = value => createHash('sha256').update(value).digest('hex');
 export const rfcHash = id => sha256(String(id).toLowerCase());
 const failed = verdict => verdict?.status === 'FAIL';
 
+// Stores body and parts at deterministic keys, so a retried attempt overwrites rather than duplicates.
+export async function storeMessage({ objects, domainId, messageId, parsed, raw, extra = {} }) {
+  const prefix = `mail/${domainId}/${messageId}`, parts = [];
+  for (const [index, part] of parsed.attachments.entries()) {
+    const key = `${prefix}/parts/${index}`;
+    await objects.put(key, part.content, part.contentType);
+    parts.push({ index, key, filename: part.filename, contentType: part.contentType, size: part.size, sha256: part.sha256, cid: part.cid, inline: part.inline });
+  }
+  await objects.put(`${prefix}/body.json`, JSON.stringify({ text: parsed.text, html: parsed.html }), 'application/json');
+  const manifestKey = `${prefix}/manifest.json`;
+  await objects.put(manifestKey, JSON.stringify({ version: 1, raw, body: `${prefix}/body.json`, parts, attachmentsOmitted: parsed.attachmentsOmitted, rfcMessageId: parsed.rfcMessageId, references: parsed.references, replyTo: parsed.replyTo, ...extra }), 'application/json');
+  return { manifestKey, parts };
+}
+
 // Accepts an SES "Received" notification for an S3 receipt action. Routing uses the
 // SES envelope recipients, never visible To/Cc headers.
 export async function ingestNotification({ notification, repo, objects, bucket, environment = 'production', now = Date.now }) {
@@ -31,18 +45,9 @@ export async function ingestNotification({ notification, repo, objects, bucket, 
       await repo.failReceipt({ domainId, receiptKey, token: claim.token, error: parseError.message });
       results.push({ domainId, status: 'failed' }); continue;
     }
-    const { messageId, generation } = claim, prefix = `mail/${domainId}/${messageId}`;
+    const { messageId, generation } = claim;
     const quarantined = failed(receipt.virusVerdict);
-    const parts = [];
-    for (const [index, part] of parsed.attachments.entries()) {
-      const key = `${prefix}/parts/${index}`;
-      await objects.put(key, part.content, part.contentType);
-      parts.push({ index, key, filename: part.filename, contentType: part.contentType, size: part.size, sha256: part.sha256, cid: part.cid, inline: part.inline });
-    }
-    await objects.put(`${prefix}/body.json`, JSON.stringify({ text: parsed.text, html: parsed.html }), 'application/json');
-    const manifestKey = `${prefix}/manifest.json`;
-    await objects.put(manifestKey, JSON.stringify({ version: 1, raw: { bucket, key: receipt.action.objectKey }, body: `${prefix}/body.json`, parts, attachmentsOmitted: parsed.attachmentsOmitted, rfcMessageId: parsed.rfcMessageId, replyTo: parsed.replyTo }), 'application/json');
-
+    const { manifestKey, parts } = await storeMessage({ objects, domainId, messageId, parsed, raw: { bucket, key: receipt.action.objectKey } });
     const threadId = await repo.threadFor(domainId, parsed.references.map(rfcHash)) || messageId;
     const index = positions(searchFields(parsed));
     await repo.insertPositions({ domainId, messageId, generation, rows: index.rows });

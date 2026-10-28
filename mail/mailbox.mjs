@@ -97,9 +97,11 @@ export function createMailbox({ pool, objects }) {
       const { rows } = await pool.query(`SELECT ${MESSAGE_COLUMNS} FROM mail.mailbox_entries e JOIN mail.messages m ON m.domain_id=e.domain_id AND m.message_id=e.message_id
         WHERE e.domain_id=$1 AND e.alias_id=$2 AND e.thread_id=$3 ORDER BY e.received_at, e.message_id`, [scope.domainId, scope.aliasId, uuid(thread)]);
       if (!rows.length) fail('Conversation not found', 404);
+      const { rows: attempts } = await pool.query(`SELECT message_id, state, detail FROM mail.send_attempts WHERE domain_id=$1 AND message_id IN (${placeholders(rows, 1)})`, [scope.domainId, ...rows.map(row => row.message_id)]);
+      const delivery = new Map(attempts.map(row => [row.message_id, { state: row.state, detail: row.detail }]));
       return Promise.all(rows.map(async row => {
         const manifest = JSON.parse(await objects.get(row.object_manifest_key)), body = JSON.parse(await objects.get(manifest.body));
-        return { ...summary(row), text: body.text, html: body.html, replyTo: manifest.replyTo || [], rfcMessageId: manifest.rfcMessageId || null,
+        return { ...summary(row), text: body.text, html: body.html, replyTo: manifest.replyTo || [], rfcMessageId: manifest.rfcMessageId || null, bcc: manifest.bcc || [], delivery: delivery.get(row.message_id) || null,
           attachments: manifest.parts.map(part => ({ id: String(part.index), name: part.filename, type: part.contentType, size: part.size, inline: part.inline, cid: part.cid })) };
       }));
     },

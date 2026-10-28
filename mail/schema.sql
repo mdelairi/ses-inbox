@@ -136,3 +136,4 @@ CREATE TABLE IF NOT EXISTS mail.send_attempts (
   PRIMARY KEY (domain_id, attempt_id)
 );
 CREATE UNIQUE INDEX ASYNC IF NOT EXISTS send_attempts_ses ON mail.send_attempts(ses_message_id);
+CREATE INDEX ASYNC IF NOT EXISTS send_attempts_message ON mail.send_attempts(domain_id, message_id);
