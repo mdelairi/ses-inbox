@@ -69,6 +69,22 @@ test('permanent deletion needs Trash, keeps other aliases, and blocks replay', {
   const { delivered } = await t.repo.publish({ receipt: { key: rows[0].receipt_key, token: 'replay' }, message: replay, aliasIds: [t.aliases.info, t.aliases.taylor], folder: 'inbox' });
   assert.deepEqual(delivered, [t.aliases.taylor]);
 });
+test('content is purged when the last alias deletes a message, and only then', { skip }, async () => {
+  const t = await setup();
+  const [delivery] = await t.deliver(['info@example.com', 'taylor@example.com'], { attachments: [{ filename: 'a.txt', content: 'abc' }] });
+  const id = delivery.messageId, prefix = `mail/${t.domains.example}/${id}/`;
+  const filed = () => [...t.stored.keys()].filter(key => key.startsWith(prefix)).sort();
+  const count = async table => (await db.pool.query(`SELECT count(*)::int AS n FROM mail.${table} WHERE message_id=$1`, [id])).rows[0].n;
+  assert.deepEqual(filed().map(key => key.slice(prefix.length)), ['body.json', 'manifest.json', 'parts/0', 'raw.eml']);
+  for (const mailbox of ['info@example.com', 'taylor@example.com']) await t.mailbox.setState({ mailbox, ids: [id], folder: 'trash' });
+  await t.mailbox.deleteForever({ mailbox: 'info@example.com', ids: [id] });
+  assert.equal(filed().length, 4, 'taylor@ still holds the message');
+  await t.mailbox.deleteForever({ mailbox: 'taylor@example.com', ids: [id] });
+  assert.deepEqual(filed(), []);
+  for (const table of ['messages', 'message_ids', 'search_positions']) assert.equal(await count(table), 0, table);
+  assert.equal(await count('deletion_tombstones'), 2);
+  assert.ok([...t.stored.keys()].some(key => key.startsWith('incoming/')), 'the intake copy is left to lifecycle expiry');
+});
 test('quarantined attachments are withheld', { skip }, async () => {
   const t = await setup();
   const [delivery] = await t.deliver(['info@example.com'], { attachments: [{ filename: 'x.exe', content: 'MZ' }] }, { virus: 'FAIL' });

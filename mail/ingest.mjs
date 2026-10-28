@@ -47,7 +47,10 @@ export async function ingestNotification({ notification, repo, objects, bucket, 
     }
     const { messageId, generation } = claim;
     const quarantined = failed(receipt.virusVerdict);
-    const { manifestKey, parts } = await storeMessage({ objects, domainId, messageId, parsed, raw: { bucket, key: receipt.action.objectKey } });
+    // incoming/ is a short-lived intake buffer; the filed copy lives and dies with the message.
+    const rawKey = `mail/${domainId}/${messageId}/raw.eml`;
+    await objects.put(rawKey, raw, 'message/rfc822');
+    const { manifestKey, parts } = await storeMessage({ objects, domainId, messageId, parsed, raw: { bucket, key: rawKey } });
     const threadId = await repo.threadFor(domainId, parsed.references.map(rfcHash)) || messageId;
     const index = positions(searchFields(parsed));
     await repo.insertPositions({ domainId, messageId, generation, rows: index.rows });

@@ -20,7 +20,10 @@ async function setup() {
 
 test('drafts save with compare-and-swap, list per alias, and are removed after sending', { skip }, async () => {
   const t = await setup(), id = randomUUID(), mailbox = 'info@example.com';
-  const draft = { to: ['client@example.net'], subject: 'Plan', text: 'Draft body' };
+  const content = Buffer.from('plan'), sha256 = createHash('sha256').update(content).digest('hex');
+  const { key } = await t.call('/api/mail/upload', { mailbox, sha256, size: content.length });
+  await t.objects.put(key, content);
+  const draft = { to: ['client@example.net'], subject: 'Plan', text: 'Draft body', attachments: [{ key, name: 'plan.txt', type: 'text/plain', size: content.length, sha256 }] };
   const first = await t.call('/api/mail/draft/save', { mailbox, id, revision: 0, draft });
   const second = await t.call('/api/mail/draft/save', { mailbox, id, revision: first.revision, draft: { ...draft, text: 'Edited' } });
   await assert.rejects(t.call('/api/mail/draft/save', { mailbox, id, revision: first.revision, draft }), { status: 409 });
@@ -31,6 +34,7 @@ test('drafts save with compare-and-swap, list per alias, and are removed after s
   const sent = await t.call('/api/mail/send', { mailbox, attemptId: randomUUID(), draftId: id, ...draft });
   assert.equal(sent.state, 'sent');
   assert.deepEqual(await t.call('/api/mail/drafts', { mailbox }), []);
+  assert.deepEqual([...t.stored.keys()].filter(key => /^(drafts|uploads)\//.test(key)), [], 'sending removes the draft and its uploads');
 });
 test('entries list every alias with metadata; search reports matched ids; drafts keep typed recipients', { skip }, async () => {
   const t = await setup();

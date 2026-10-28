@@ -51,8 +51,10 @@ export function createDrafts({ pool, objects, mailbox, now = Date.now }) {
       const scope = await mailbox.alias(address);
       const { rows: [row] } = await pool.query('SELECT object_key FROM mail.drafts WHERE domain_id=$1 AND alias_id=$2 AND draft_id=$3', [scope.domainId, scope.aliasId, uuid(id)]);
       if (!row) return { removed: false };
+      const draft = JSON.parse(await objects.get(row.object_key).catch(() => '{}'));
       await pool.query('DELETE FROM mail.drafts WHERE domain_id=$1 AND alias_id=$2 AND draft_id=$3', [scope.domainId, scope.aliasId, id]);
-      await objects.remove(row.object_key).catch(() => {});
+      // Uploads belong to their draft; a sent message keeps its own copy of every part.
+      for (const key of [row.object_key, ...(draft.attachments ?? []).map(file => file?.key).filter(key => typeof key === 'string' && key.startsWith(`uploads/${scope.domainId}/`))]) await objects.remove(key).catch(() => {});
       return { removed: true };
     },
     // Draft attachments are read back by their upload key, only within the alias's domain.

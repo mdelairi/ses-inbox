@@ -15,8 +15,9 @@ for (const arn of [app.AppRoleArn, app.WorkerRoleArn]) if (!arn.startsWith(`arn:
 
 // Each role gets only what its code paths use (mail/repository, mailbox, drafts, send, ingest).
 const GRANTS = {
-  inbox_mail: { role: app.AppRoleArn, tables: { domains: 'SELECT', aliases: 'SELECT', messages: 'SELECT, INSERT', message_ids: 'SELECT, INSERT', mailbox_entries: 'SELECT, INSERT, UPDATE, DELETE',
-    search_positions: 'SELECT, INSERT', drafts: 'SELECT, INSERT, UPDATE, DELETE', deletion_tombstones: 'SELECT, INSERT', ingestion_receipts: 'SELECT', send_attempts: 'SELECT, INSERT, UPDATE' } },
+  // DELETE on content tables is for purging a message after its last alias deletes it.
+  inbox_mail: { role: app.AppRoleArn, tables: { domains: 'SELECT', aliases: 'SELECT', messages: 'SELECT, INSERT, DELETE', message_ids: 'SELECT, INSERT, DELETE', mailbox_entries: 'SELECT, INSERT, UPDATE, DELETE',
+    search_positions: 'SELECT, INSERT, DELETE', drafts: 'SELECT, INSERT, UPDATE, DELETE', deletion_tombstones: 'SELECT, INSERT', ingestion_receipts: 'SELECT', send_attempts: 'SELECT, INSERT, UPDATE, DELETE' } },
   inbox_worker: { role: app.WorkerRoleArn, tables: { domains: 'SELECT', aliases: 'SELECT', messages: 'SELECT, INSERT', message_ids: 'SELECT, INSERT', mailbox_entries: 'SELECT, INSERT',
     search_positions: 'SELECT, INSERT', deletion_tombstones: 'SELECT', ingestion_receipts: 'SELECT, INSERT, UPDATE', send_attempts: 'SELECT, UPDATE' } },
 };

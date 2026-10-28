@@ -8,19 +8,35 @@
     "project-inbox-prod-artifacts",
     "project-inbox-prod-certificate",
     "project-inbox-prod-storage",
-    "project-inbox-prod-app"
+    "project-inbox-prod-app",
+    "project-inbox-prod-receiving-example",
+    "project-inbox-prod-receiving-exampleorg"
   ],
   "distributionId": "E1EXAMPLE00004",
   "distributionDomain": "d2example00000.cloudfront.net",
   "authTable": "project-inbox-prod-app-Sessions-EXAMPLE",
-  "artifactKey": "releases/432516dfa10c691ec132fe3c8b5de5b6661fd6b94a784ddbb661b9491ae717a4/lambda.zip",
-  "lambdaSha256": "432516dfa10c691ec132fe3c8b5de5b6661fd6b94a784ddbb661b9491ae717a4",
+  "artifactKey": "releases/d3c247e4e5e1d7e61087dad84a31fe84c2bdbc1c43765bd7d84d107cea068db8/lambda.zip",
+  "lambdaSha256": "d3c247e4e5e1d7e61087dad84a31fe84c2bdbc1c43765bd7d84d107cea068db8",
   "mailBucket": "project-inbox-prod-storage-mail-EXAMPLE",
   "mailDatabaseId": "exampleclusterprod00000000",
   "configurationSet": "project-inbox-prod-storage",
   "receiptRuleSet": "exampleorg-support",
   "receiptRules": [
-    { "stack": "project-inbox-prod-receiving-example", "rule": "project-inbox-example", "recipients": ["info@example.com", "taylor@example.com"] }
+    {
+      "stack": "project-inbox-prod-receiving-example",
+      "rule": "project-inbox-example",
+      "recipients": [
+        "info@example.com",
+        "taylor@example.com"
+      ]
+    },
+    {
+      "stack": "project-inbox-prod-receiving-exampleorg",
+      "rule": "project-inbox-exampleorg",
+      "recipients": [
+        "info@example.org"
+      ]
+    }
   ],
   "checks": {
     "databaseInitialized": true,
@@ -30,6 +46,9 @@
     "directOriginDenied": true,
     "unsignedApiRejected": true,
     "ownerGoogleLogin": true,
-    "realSendDelivered": true
+    "realSendDelivered": true,
+    "exampleorgReceived": true,
+    "rawCopyFiled": true,
+    "alarmEmailSubscribed": "pending-confirmation"
   }
 }

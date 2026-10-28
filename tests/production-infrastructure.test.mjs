@@ -46,6 +46,14 @@ test('the app may send only from the two domains; the worker cannot send or dele
   assert.equal(app.AppUrl.Properties.AuthType, 'AWS_IAM');
   assert.equal(applicationTemplate().Parameters.EnableDistribution.Default, 'false');
   assert.deepEqual(app.WorkerSource.Properties.FunctionResponseTypes, ['ReportBatchItemFailures']);
+  for (const alarm of [app.DeadLetterAlarm, app.WorkerErrorAlarm]) assert.deepEqual(alarm.Properties.AlarmActions, [{ Ref: 'Alarms' }]);
+  assert.deepEqual(app.AlarmEmail.Properties.Endpoint, { Ref: 'OwnerEmail' });
+});
+test('only the intake buffer expires; recovery versions stay inside 30 days', () => {
+  const [versions, intake] = storageTemplate().Resources.Mail.Properties.LifecycleConfiguration.Rules;
+  assert.equal(versions.NoncurrentVersionExpiration.NoncurrentDays, 29); assert.equal(versions.ExpirationInDays, undefined);
+  assert.equal(intake.Prefix, 'incoming/'); assert.ok(intake.ExpirationInDays + intake.NoncurrentVersionExpiration.NoncurrentDays < 30);
+  assert.ok(intake.ExpirationInDays >= storageTemplate().Resources.DeadLetters.Properties.MessageRetentionPeriod / 86400, 'raw mail outlives dead-lettered notifications');
 });
 test('the receipt rule targets exact recipients in the existing rule set and never stops processing', () => {
   const rule = receivingTemplate().Resources.Rule.Properties;
