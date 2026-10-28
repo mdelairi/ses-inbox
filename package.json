@@ -15,7 +15,8 @@
     "stage:prepare": "node scripts/prepare-stage.mjs",
     "stage:package": "node scripts/package-stage.mjs",
     "stage:check": "node scripts/check-stage.mjs",
-    "stage:test": "node --test stage/google.test.mjs"
+    "stage:test": "node --test stage/google.test.mjs",
+    "live:prepare": "node scripts/prepare-live.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",

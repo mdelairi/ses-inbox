@@ -146,3 +146,10 @@ export async function persistState(state) {
   revision = result.revision; baseline = text; dirty = false; lastAttempt = undefined;
   const pending = await recovery('get'); if (pending?.id === recoveryId) await recovery('delete'); recoveryId = undefined;
 }
+
+// Real-mail hooks (web/live-mail.mjs); this storage has no live mail.
+export const liveMail = false;
+export async function loadConversation() {}
+export async function searchMail() { return null; }
+export async function attachmentUrl() { return null; }
+export async function sendDraft() { throw new Error('Sending is not available in this preview.'); }

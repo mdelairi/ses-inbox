@@ -46,6 +46,14 @@ export function createMailbox({ pool, objects }) {
       return rows.map(row => ({ address: row.address, name: row.display_name, domain: row.domain, domainLabel: row.label, receiveEnabled: row.receive_enabled, sendEnabled: row.send_enabled, default: row.is_default, signature: row.signature }));
     },
 
+    // Every mailbox entry with message metadata (no bodies), newest first and bounded.
+    async entries({ limit = 5000 } = {}) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 5000) fail('Limit must be 1..5000');
+      const { rows } = await pool.query(`SELECT ${MESSAGE_COLUMNS}, a.address AS mailbox, d.name AS domain FROM mail.mailbox_entries e JOIN mail.messages m ON m.domain_id=e.domain_id AND m.message_id=e.message_id
+        JOIN mail.aliases a ON a.domain_id=e.domain_id AND a.alias_id=e.alias_id JOIN mail.domains d ON d.domain_id=e.domain_id ORDER BY e.received_at DESC, e.message_id DESC LIMIT $1`, [limit + 1]);
+      return { entries: rows.slice(0, limit).map(row => ({ ...summary(row), domain: row.domain, mailbox: row.mailbox })), truncated: rows.length > limit };
+    },
+
     // Conversations are paged by their latest message in the folder, never as loose messages.
     async listThreads({ mailbox, folder = 'inbox', unread = false, source, environment, cursor, limit = 50 }) {
       if (!FOLDERS.includes(folder)) fail('Unknown folder');
@@ -69,7 +77,7 @@ export function createMailbox({ pool, objects }) {
     // Words are ANDed against the current search generation; phrases are verified by position.
     async search({ mailbox, query, field, limit = 50 }) {
       const scope = await alias(mailbox), parsed = parseQuery(query, field);
-      if (!parsed.tokens.length) return { threads: [], truncated: false };
+      if (!parsed.tokens.length) return { threads: [], ids: [], truncated: false };
       const args = [scope.domainId, scope.aliasId], exists = parsed.tokens.map(token => {
         const tokenParam = args.push(token), fieldClause = parsed.field ? ` AND p.field=$${args.push(parsed.field)}` : '';
         return `EXISTS (SELECT 1 FROM mail.search_positions p WHERE p.domain_id=e.domain_id AND p.message_id=e.message_id AND p.generation=m.search_generation AND p.token=$${tokenParam}${fieldClause})`;
@@ -89,7 +97,7 @@ export function createMailbox({ pool, objects }) {
       }
       const order = [], threads = new Map();
       for (const row of matches) { if (!threads.has(row.thread_id)) { threads.set(row.thread_id, { thread: row.thread_id, count: 0, unread: false }); order.push(threads.get(row.thread_id)); } threads.get(row.thread_id).count++; }
-      return { threads: await summaries(scope, order.slice(0, limit)), truncated: truncated || order.length > limit };
+      return { threads: await summaries(scope, order.slice(0, limit)), ids: matches.map(row => row.message_id), truncated: truncated || order.length > limit };
     },
 
     async readThread({ mailbox, thread }) {

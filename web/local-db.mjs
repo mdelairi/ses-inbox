@@ -29,3 +29,10 @@ export async function persistState(state) {
     transaction.onabort = transaction.onerror = () => reject(new Error('Your changes could not be saved locally. Check browser storage space before closing this tab.'));
   });
 }
+
+// Real-mail hooks (web/live-mail.mjs); this storage has no live mail.
+export const liveMail = false;
+export async function loadConversation() {}
+export async function searchMail() { return null; }
+export async function attachmentUrl() { return null; }
+export async function sendDraft() { throw new Error('Sending is not available in this preview.'); }

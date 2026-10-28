@@ -32,6 +32,22 @@ test('drafts save with compare-and-swap, list per alias, and are removed after s
   assert.equal(sent.state, 'sent');
   assert.deepEqual(await t.call('/api/mail/drafts', { mailbox }), []);
 });
+test('entries list every alias with metadata; search reports matched ids; drafts keep typed recipients', { skip }, async () => {
+  const t = await setup();
+  const [shared] = await t.deliver(['info@example.com', 'taylor@example.com'], { subject: 'Shared quote' });
+  await t.deliver(['info@example.org'], { subject: 'Other domain' });
+  const { entries, truncated } = await t.call('/api/mail/entries');
+  assert.equal(truncated, false);
+  assert.deepEqual(entries.map(item => `${item.mailbox}:${item.subject}`).sort(), ['info@example.com:Shared quote', 'info@example.org:Other domain', 'taylor@example.com:Shared quote']);
+  assert.equal(entries.find(item => item.mailbox === 'info@example.com').domain, 'example.com');
+  assert.equal('text' in entries[0], false);
+  assert.deepEqual((await t.call('/api/mail/search', { mailbox: 'info@example.com', query: 'quote' })).ids, [shared.messageId]);
+  const id = randomUUID();
+  await t.call('/api/mail/draft/save', { mailbox: 'info@example.com', id, revision: 0, draft: { to: 'half-typed@exa', subject: 'x' } });
+  assert.equal((await t.call('/api/mail/draft', { mailbox: 'info@example.com', id })).draft.to, 'half-typed@exa');
+  await assert.rejects(t.call('/api/mail/upload/download', { mailbox: 'info@example.com', key: `uploads/${t.domains.exampleorg}/x` }), { status: 404 });
+  assert.match((await t.call('/api/mail/upload/download', { mailbox: 'info@example.com', key: `uploads/${t.domains.example}/x` })).url, /uploads/);
+});
 test('uploads, attachment links and routing errors', { skip }, async () => {
   const t = await setup(), bytes = Buffer.from('file'), sha256 = createHash('sha256').update(bytes).digest('hex');
   const ticket = await t.call('/api/mail/upload', { mailbox: 'info@example.com', sha256, size: bytes.length });

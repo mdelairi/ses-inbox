@@ -10,6 +10,7 @@ export function createMailApi({ pool, objects, ses, bucket, configurationSet, en
   const sender = createSender({ pool, objects, ses, mailbox, bucket, configurationSet, environment, now });
   const routes = {
     '/api/mail/mailboxes': () => mailbox.aliases(),
+    '/api/mail/entries': body => mailbox.entries({ limit: body.limit }),
     '/api/mail/threads': body => mailbox.listThreads(body),
     '/api/mail/search': body => mailbox.search(body),
     '/api/mail/thread': body => mailbox.readThread(body),
@@ -17,6 +18,7 @@ export function createMailApi({ pool, objects, ses, bucket, configurationSet, en
     '/api/mail/delete': body => mailbox.deleteForever({ mailbox: body.mailbox, ids: body.ids }),
     '/api/mail/attachment': async body => { const file = await mailbox.attachment(body); return { name: file.name, type: file.type, size: file.size, url: await objects.downloadUrl(file.key, file.name, file.type) }; },
     '/api/mail/upload': body => drafts.uploadTicket(body),
+    '/api/mail/upload/download': body => drafts.uploadDownload(body),
     '/api/mail/drafts': body => drafts.list(body),
     '/api/mail/draft': body => drafts.get(body),
     '/api/mail/draft/save': body => drafts.save(body),

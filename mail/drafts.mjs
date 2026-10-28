@@ -8,7 +8,8 @@ const utc = value => new Date(String(value).replace(' ', 'T') + 'Z').toISOString
 
 function validDraft(draft, domainId) {
   if (!draft || typeof draft !== 'object') fail('Invalid draft');
-  for (const field of ['to', 'cc', 'bcc']) if (!Array.isArray(draft[field] ?? []) || (draft[field] ?? []).length > 50) fail('Too many recipients');
+  // Drafts keep recipients exactly as typed, including half-written addresses.
+  for (const field of ['to', 'cc', 'bcc']) { const value = draft[field] ?? ''; if (typeof value === 'string' ? value.length > 10000 : !Array.isArray(value) || value.length > 50) fail('Too many recipients'); }
   if (String(draft.subject ?? '').length > 998) fail('Shorten the subject.');
   for (const file of draft.attachments ?? []) if (typeof file?.key !== 'string' || !file.key.startsWith(`uploads/${domainId}/`) || file.key.includes('..')) fail('Attachment upload is missing.');
   const text = JSON.stringify(draft);
@@ -53,6 +54,12 @@ export function createDrafts({ pool, objects, mailbox, now = Date.now }) {
       await pool.query('DELETE FROM mail.drafts WHERE domain_id=$1 AND alias_id=$2 AND draft_id=$3', [scope.domainId, scope.aliasId, id]);
       await objects.remove(row.object_key).catch(() => {});
       return { removed: true };
+    },
+    // Draft attachments are read back by their upload key, only within the alias's domain.
+    async uploadDownload({ mailbox: address, key }) {
+      const scope = await mailbox.alias(address);
+      if (typeof key !== 'string' || !key.startsWith(`uploads/${scope.domainId}/`) || key.includes('..')) fail('Attachment not found', 404);
+      return { url: await objects.downloadUrl(key, 'attachment') };
     },
     // Uploads go to a fresh per-domain key; send/draft validation re-checks size and SHA-256.
     async uploadTicket({ mailbox: address, sha256, size }) {

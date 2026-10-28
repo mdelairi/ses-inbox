@@ -42,6 +42,8 @@ export function createSearchIndex(messages) {
   return { terms, documents };
 }
 export function searchIds(index, domain, query) {
+  // Live mail: ids come from the server search for the selected mailbox; null means no query.
+  if (index.remote) { const key = query.trim(); return key ? index.remote.get(key) || new Set() : null; }
   const phrases = [...query.matchAll(/"([^"]+)"/g)].map(match => normalize(match[1])).filter(Boolean);
   const tokens = words(query);
   if (!tokens.length) return null;
