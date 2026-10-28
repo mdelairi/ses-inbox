@@ -17,7 +17,7 @@ export async function mailFixture(db) {
   }
   const stored = new Map();
   const objects = {
-    async getRaw(b, key) { return stored.get(key); },
+    async getRaw(b, key) { if (!stored.has(key)) throw Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' }); return stored.get(key); },
     async get(key) { if (!stored.has(key)) throw Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' }); return stored.get(key).toString(); },
     async getBytes(key) { if (!stored.has(key)) throw Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' }); return stored.get(key); },
     async put(key, body) { stored.set(key, Buffer.from(body)); },

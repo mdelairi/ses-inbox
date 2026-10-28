@@ -4,6 +4,7 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 import { createStageHandler } from './auth.mjs';
 import { verifyGoogleToken } from './google.mjs';
 import { createCloudMailApi } from './mail-store.mjs';
+import { createRealMailApi } from '../mail/cloud.mjs';
 
 const region = process.env.AWS_REGION;
 const dynamo = new DynamoDBClient({ region, maxAttempts: 2 });
@@ -54,5 +55,9 @@ async function asset(path) {
   }
   return cachedAssets.get(name);
 }
-const api = process.env.MAIL_BUCKET && process.env.MAIL_DATABASE_HOST ? createCloudMailApi({ bucket: process.env.MAIL_BUCKET, host: process.env.MAIL_DATABASE_HOST, region }) : undefined;
+// MAIL_MODE=real serves the relational mail repository; otherwise the sample workspace bridge.
+const storage = process.env.MAIL_BUCKET && process.env.MAIL_DATABASE_HOST ? { bucket: process.env.MAIL_BUCKET, host: process.env.MAIL_DATABASE_HOST, region } : null;
+const api = !storage ? undefined : process.env.MAIL_MODE === 'real'
+  ? createRealMailApi({ ...storage, configurationSet: process.env.SES_CONFIGURATION_SET, environment: process.env.MAIL_ENVIRONMENT || 'production' })
+  : createCloudMailApi(storage);
 export const handler = createStageHandler({ origin: process.env.PUBLIC_ORIGIN, ownerEmail: process.env.OWNER_EMAIL, store, getGoogleClient, exchangeCode, verifyGoogleToken, asset, api, storageOrigin: api ? `https://${process.env.MAIL_BUCKET}.s3.us-east-1.amazonaws.com` : undefined, log: data => console.error('stage-request-failed', data) });
