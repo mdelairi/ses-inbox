@@ -59,6 +59,8 @@ The hosted sample stage persists drafts, aliases, mailbox state, attached files,
 
 Source now also includes sample-stage retention: a permanent-deletion ledger that prevents resurrection, 29-day retirement of replaced states and attachments, an hourly cleanup Lambda with failure alarms, and an additive recovery function. It was deployed to staging on October 28, 2026; see [STAGING.md](STAGING.md#retention-and-recovery-deployed-october-28-2026).
 
-Production mail integration, real SES receiving/sending, automated project capture, the relational mail repository/server search, background iPhone push, and verified backups remain pending. Search in the shared sample stage still runs in the browser; the separate benchmark validates candidate DSQL query behavior, not complete production costs.
+Real mail is live in production at [inbox.example.com](https://inbox.example.com) for info@ and taylor@example.com, with sending from all four aliases. See [PRODUCTION.md](PRODUCTION.md) for the mail flow, runbook, and known gaps.
+
+Receiving for example.org, automated project capture, background iPhone push, and verified backups remain pending. Production uses the relational mail repository and server search; the shared sample stage still searches in the browser; the separate benchmark validates candidate DSQL query behavior, not complete production costs.
 
 The local preview runs without AWS. Hosted staging changes are isolated to this app; production email routing and other project sources remain unchanged. See [PROJECT_PLAN.md](PROJECT_PLAN.md), [AWS_AUDIT.md](AWS_AUDIT.md), and [ARCHITECTURE_PROPOSAL.md](ARCHITECTURE_PROPOSAL.md) for the confirmed requirements, existing infrastructure, and proposed production design.

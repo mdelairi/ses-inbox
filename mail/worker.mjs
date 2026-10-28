@@ -10,7 +10,7 @@ export function unwrap(body) {
 }
 
 // Partial batch responses: only failed records are retried; permanent failures are logged and dropped.
-export function createWorker({ pool, objects, ses, bucket, environment, log = console.error }) {
+export function createWorker({ pool, objects, ses, bucket, environment, log = console.log, warn = console.error }) {
   const repo = createRepository(pool), mailbox = createMailbox({ pool, objects });
   const sender = createSender({ pool, objects, ses, mailbox, bucket, environment });
   return async event => {
@@ -24,8 +24,8 @@ export function createWorker({ pool, objects, ses, bucket, environment, log = co
         } else if (message.eventType) await sender.recordEvent(message);
         else log(JSON.stringify({ kind: 'mail-ignored', messageId: record.messageId }));
       } catch (error) {
-        if (error.permanent) { log(JSON.stringify({ kind: 'mail-rejected', messageId: record.messageId, error: error.message })); continue; }
-        log(JSON.stringify({ kind: 'mail-retry', messageId: record.messageId, error: error.name }));
+        if (error.permanent) { warn(JSON.stringify({ kind: 'mail-rejected', messageId: record.messageId, error: error.message })); continue; }
+        warn(JSON.stringify({ kind: 'mail-retry', messageId: record.messageId, error: error.name }));
         batchItemFailures.push({ itemIdentifier: record.messageId });
       }
     }

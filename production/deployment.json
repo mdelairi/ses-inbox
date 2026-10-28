@@ -1,0 +1,35 @@
+{
+  "environment": "production",
+  "verifiedOn": "2026-10-28",
+  "url": "https://inbox.example.com",
+  "accountId": "111111111111",
+  "region": "us-east-1",
+  "stacks": [
+    "project-inbox-prod-artifacts",
+    "project-inbox-prod-certificate",
+    "project-inbox-prod-storage",
+    "project-inbox-prod-app"
+  ],
+  "distributionId": "E1EXAMPLE00004",
+  "distributionDomain": "d2example00000.cloudfront.net",
+  "authTable": "project-inbox-prod-app-Sessions-EXAMPLE",
+  "artifactKey": "releases/432516dfa10c691ec132fe3c8b5de5b6661fd6b94a784ddbb661b9491ae717a4/lambda.zip",
+  "lambdaSha256": "432516dfa10c691ec132fe3c8b5de5b6661fd6b94a784ddbb661b9491ae717a4",
+  "mailBucket": "project-inbox-prod-storage-mail-EXAMPLE",
+  "mailDatabaseId": "exampleclusterprod00000000",
+  "configurationSet": "project-inbox-prod-storage",
+  "receiptRuleSet": "exampleorg-support",
+  "receiptRules": [
+    { "stack": "project-inbox-prod-receiving-example", "rule": "project-inbox-example", "recipients": ["info@example.com", "taylor@example.com"] }
+  ],
+  "checks": {
+    "databaseInitialized": true,
+    "workerDatabaseAccess": true,
+    "signedOutRedirect": true,
+    "httpsUpgrade": true,
+    "directOriginDenied": true,
+    "unsignedApiRejected": true,
+    "ownerGoogleLogin": true,
+    "realSendDelivered": true
+  }
+}

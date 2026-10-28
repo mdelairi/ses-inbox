@@ -19,7 +19,7 @@ test('SNS envelopes and raw deliveries unwrap to the same payload', () => {
 });
 test('the worker ingests mail, records events, drops permanent failures and retries the rest', { skip }, async () => {
   const f = await mailFixture(db), logs = [];
-  const worker = createWorker({ pool: db.pool, objects: f.objects, ses: {}, bucket, log: line => logs.push(line) });
+  const worker = createWorker({ pool: db.pool, objects: f.objects, ses: {}, bucket, log: line => logs.push(line), warn: line => logs.push(line) });
   const key = `incoming/${randomUUID()}`;
   await f.objects.put(key, await new MailComposer({ from: 'a@example.net', to: 'info@example.com', subject: 'Via worker', text: 'Hi' }).compile().build());
   const received = { notificationType: 'Received', mail: { messageId: 'ses-1', timestamp: new Date().toISOString() }, receipt: { recipients: ['info@example.com'], action: { type: 'S3', bucketName: bucket, objectKey: key } } };
