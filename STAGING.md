@@ -155,9 +155,10 @@ For a storage update, create/review the storage-stack change set first, initiali
 
 To deploy the retention release:
 1. Update the storage stack for the 29-day lifecycle.
-2. Update the application stack with `MaintenanceArtifactKey` set to the packaged release key and `EnableCleanup=false`. The maintenance function and schedule are created but disabled.
+2. Upload the release ZIP. Update the application stack with `MaintenanceArtifactKey` set to the new release key, `EnableCleanup=false`, and **`ArtifactKey` left at its previous value**. The maintenance function and schedule are created but disabled, and the live app keeps its current code.
 3. Re-run `scripts/init-stage-storage.mjs`, which adds the columns, tables, roles, and the `inbox_maintenance` mappings. It needs the `MaintenanceRole` from step 2.
-4. Invoke the maintenance function once manually and review its metrics and logs.
-5. Set `EnableCleanup=true` through a reviewed change set.
+4. Only now update `ArtifactKey` to the new release. The new app code reads the tables and columns created in step 3, so switching it earlier would fail live saves. The old code keeps working against the extended schema.
+5. Invoke the maintenance function once manually, review its metrics and logs, and run `node scripts/test-shared-stage.mjs`.
+6. Set `EnableCleanup=true` through a reviewed change set.
 
 Roll back the application using its previous immutable artifact/template; retain shared data and the owner pin. Older releases ignore shared storage and show their original browser-only sample data.
