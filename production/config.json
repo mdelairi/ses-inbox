@@ -1,0 +1,22 @@
+{
+  "environment": "production",
+  "profile": "example-production",
+  "accountId": "111111111111",
+  "region": "us-east-1",
+  "dnsProfile": "example-management",
+  "dnsAccountId": "333333333333",
+  "hostname": "inbox.example.com",
+  "ownerEmail": "owner@example.net",
+  "stackPrefix": "project-inbox-prod",
+  "googleSecretName": "project-inbox-prod/google",
+  "domains": [
+    { "name": "example.com", "label": "Example", "aliases": [
+      { "address": "info@example.com", "name": "Example", "default": true, "signature": "Warm regards,\nTaylor Example" },
+      { "address": "taylor@example.com", "name": "Taylor Example", "default": false, "signature": "Taylor Example\nexample.com" }
+    ] },
+    { "name": "example.org", "label": "ExampleOrg", "aliases": [
+      { "address": "info@example.org", "name": "ExampleOrg", "default": true, "signature": "The ExampleOrg team\nexample.org" },
+      { "address": "support@example.org", "name": "ExampleOrg Support", "default": false, "signature": "Taylor\nExampleOrg Support" }
+    ] }
+  ]
+}
