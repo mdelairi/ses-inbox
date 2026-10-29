@@ -40,15 +40,16 @@ Real mail for all four addresses is received and sent here. support@example.org 
 
 Deploy `build/production/templates/receiving.json` as a new stack per domain with `RuleName=project-inbox-<name>` and exact `Recipients`. The bucket policy only accepts writes from rules named `project-inbox-*` in `exampleorg-support`. The domain then needs an MX record pointing to SES, after checking what that domain receives today. Update an existing stack's `Recipients` with a change set rather than adding a second rule for the same domain. CloudFormation inserts new rules at the top of the set, so they run before `StoreSupport`.
 
-## Retention and cleanup
+## Retention, backups and cleanup
 
-There is no scheduled cleanup job; each rule below runs inline or as a bucket lifecycle rule.
+Live and cloud-verified October 28, 2026. The separate `project-inbox-prod-recovery` stack runs maintenance hourly and creates a self-contained backup at the first pass at least 24 hours after the last complete backup. See [PRODUCTION_RECOVERY.md](PRODUCTION_RECOVERY.md) for operations, recovery commands, cost/scale limits and verification evidence.
 
-- **Delete forever** removes the alias's entry and writes a tombstone. When no other alias holds the message, the same request deletes its filed objects, search positions and rows. A purge failure is logged (`purge-failed`) and leaves only invisible data.
-- **`incoming/`** is an intake buffer: current objects expire after 14 days (the dead-letter retention), noncurrent ones a day later. Each filed message keeps its own `raw.eml`. Mail received before October 28's cleanup release points its raw copy at `incoming/`, so that copy expires with the buffer.
-- **Recovery versions** of everything else expire 29 days after they are replaced or deleted, keeping asynchronous lifecycle lag inside the 30-day limit.
-- **Uploads** are deleted with their draft, after sending or on discard. An upload whose draft was never saved is not cleaned up; with 25 MB per file and a single owner this is accepted.
-- **Alarms** (dead-letter queue, worker crashes) email the owner through the `Alarms` topic once the subscription is confirmed.
+- **Delete forever** writes an independent S3 deletion intent and SQL tombstone, then removes that alias's entry. The last reference creates a durable purge job; inline cleanup and hourly retry remove stored content, index rows and metadata. Another retained alias copy prevents retirement.
+- **Recovery copies** are physically swept at 29 days from retirement; S3 lifecycle remains an asynchronous backstop. Current retained mailbox content, including Trash and Spam, never expires by age. The independent non-content ledger persists so replay and restore cannot resurrect deleted entries. Failures alarm and require repair.
+- **Backups** use a separate private encrypted bucket, contain consistent SQL metadata plus full message/draft files, and are committed by a checksummed manifest. All snapshot versions are swept 29 days from snapshot start. Restoration uses empty isolated destinations and the latest deletion ledger; live overwrite is refused. These are same-account/region copies, not account/region-loss protection.
+- **`incoming/`** remains an intake buffer with 14-day lifecycle and a 15-day physical sweep, after queue/dead-letter retention. Each filed message retains its own raw MIME. Five early originals were preserved and verified; the follow-up audit found no retained raw references to the buffer.
+- **Uploads** are deleted with their draft, after sending or on discard. Uploads whose drafts were never saved remain an accepted orphan-upload limitation.
+- **Alarms** email the owner through the confirmed SNS subscription. The four recovery alarms and scheduled execution were verified healthy; the final rule is enabled at one-hour cadence.
 
 ## Accepted risks
 

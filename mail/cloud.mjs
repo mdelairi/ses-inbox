@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, paginateListObjectsV2 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { AuroraDSQLPool } from '@aws/aurora-dsql-node-postgres-connector';
@@ -16,6 +16,11 @@ export function createCloudResources({ bucket, host, region, user = 'inbox_mail'
     async getRaw(Bucket, Key) { if (Bucket !== bucket) throw new Error('UnexpectedBucket'); return this.getBytes(Key); },
     async put(Key, Body, ContentType = 'application/octet-stream') { await send(new PutObjectCommand({ Bucket: bucket, Key, Body, ContentType, CacheControl: 'private,no-store' })); },
     async remove(Key) { await send(new DeleteObjectCommand({ Bucket: bucket, Key })); },
+    async listCurrent(Prefix) {
+      const keys = [];
+      for await (const page of paginateListObjectsV2({ client: s3 }, { Bucket: bucket, Prefix })) for (const item of page.Contents || []) keys.push(item.Key);
+      return keys;
+    },
     // Always a download, never rendered inline from the bucket origin.
     async downloadUrl(Key, name) {
       return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key, ResponseContentType: 'application/octet-stream', ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(name || 'attachment')}`, ResponseCacheControl: 'private,no-store' }), { expiresIn: 60 });

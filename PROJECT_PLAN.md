@@ -1,12 +1,10 @@
 # Multi-project email client
 
-Planning draft · updated October 27, 2026. No implementation or cloud changes are authorized by this document itself. The concrete low-cost design and reproducible estimate are in [ARCHITECTURE_PROPOSAL.md](ARCHITECTURE_PROPOSAL.md); it supersedes the earlier candidate architecture below where stated.
+Requirements and original design · status reviewed October 28, 2026.
 
-Read-only AWS discovery and the local interaction prototype are complete. See [README.md](README.md) for running/reviewing the preview, [AWS_AUDIT.md](AWS_AUDIT.md) for live findings, and [ARCHITECTURE_PROPOSAL.md](ARCHITECTURE_PROPOSAL.md) for the production design. The local preview has sample mail and browser-local persistence; the hosted stage adds Google sign-in. Live email and complete operating-cost validation remain outstanding; staging CloudFront origin/sign-in checks and the isolated synthetic DSQL benchmark are complete.
+**Current status:** production is live at [inbox.example.com](https://inbox.example.com), with owner-only Google sign-in, relational DSQL storage, server search, receiving for all four launch addresses, manual sending and SES delivery events. The sample-only shared staging environment remains separate. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the prioritized backlog and verification limits, [PRODUCTION.md](PRODUCTION.md) for the live runbook, and [STAGING.md](STAGING.md) for sample staging.
 
-The first private staging release is live at [stage.example.com](https://stage.example.com), using owner-only Google sign-in and sample mail. Deployment and live login/logout checks completed October 27, 2026. [STAGING.md](STAGING.md) records the deployed resources, stage-only architecture choices, checks, and runbook. The hosted stage now shares sample mail, mailbox state, aliases, drafts, and attached/inline files through private server storage; it cannot send real emails. Refresh/reload retrieves changes made elsewhere. Production mail integrations remain pending.
-
-[BACKEND_STORAGE.md](BACKEND_STORAGE.md) defines candidate mailbox storage, publication, synchronization, and deletion/recovery rules. A separately approved disposable staging DSQL experiment validates the schema and search/database primitives; [measured results](planning/STORAGE_BENCHMARK.md) record its scope, costs, and cleanup. The local SQLite probe also covers 1,000/10,000/50,000 synthetic messages. Neither experiment implements the production repository; the separate retained staging bridge now provides shared sample storage, while complete operating cost and representative retention remain provisional.
+The requirements below remain the acceptance baseline. Architecture sections describe the original proposal; the deployed design uses direct Google OIDC and a DynamoDB session table rather than Cognito. Production mail is implemented in `mail/`; `backend/schema.sql` and the SQLite/DSQL probes are historical feasibility work. The four original `server/` modules are an earlier scaffold. A planning document alone does not authorize cloud changes.
 
 ## Confirmed requirements
 
@@ -15,7 +13,7 @@ The first private staging release is live at [stage.example.com](https://stage.e
 - Initially support example.com and example.org, with a design that accommodates additional project domains.
 - Separate mailboxes for every email alias, grouped under domains. Switch domains with the workspace selector and addresses with tabs above the inbox. No combined inbox.
 - Receive only explicitly enabled addresses. Manage aliases in the app: add, rename/edit, and disable.
-- Launch addresses: info@example.com, taylor@example.com, info@example.org, and support@example.org. Sender display names and each domain's default sending alias remain to be chosen.
+- Launch addresses: info@example.com, taylor@example.com, info@example.org, and support@example.org. Initial sender display names and default aliases are seeded in production/config.json; they can be reviewed during setup.
 - Use existing SES infrastructure where appropriate. Inspect identities, receipt rules, and sending configuration later to establish actual addresses and capabilities.
 - No historical email migration required; a few test messages may exist.
 - Include inbox, sent, archive, trash, spam, unread status, drafts, search, conversation threads, attachments, compose, reply, and forward.
@@ -24,6 +22,7 @@ The first private staging release is live at [stage.example.com](https://stage.e
 - Exclude platform-generated verification-code and password-reset emails from Sent capture. Ordinary project notifications, invitations, reminders, and contact emails remain included.
 - Include both staging/test and production automated mail, clearly labelled and filterable by environment within each domain. Keep automated sender capture separate from the manual-send/receiving alias list; capturing no-reply@example.org does not automatically enable it as a receiving alias.
 - A background sync delay of a few minutes is acceptable for automated Sent. Manually composed mail appears immediately with its actual pending/sending/result status. This is a freshness requirement for the chosen integration, not a verified archive-service latency guarantee.
+- When producer capture is enabled, save the complete ordinary email before sending. A capture-storage failure stops the send with a definite pre-send failure; this explicitly allows delivery to be delayed during a capture outage. An acknowledgement-storage failure after SES acceptance preserves success and must not trigger a resend. Verification/reset delivery is unchanged.
 - Retain all mail, including Trash, until the owner explicitly deletes it permanently. No automatic mailbox, Spam, or Trash expiry. This is the new app's retention requirement; the existing support-bucket expiry has not been changed.
 - Private backup/recovery copies may remain for up to 30 days after permanent deletion. Normal application access ends immediately, and restores must apply deletion records so deleted messages stay deleted.
 - Support phones and desktop browsers, with background browser/phone push notifications when the app is closed on supported devices.
@@ -65,7 +64,7 @@ The first private staging release is live at [stage.example.com](https://stage.e
 
 ## Automated project mail: integration to validate
 
-The concrete proposal prefers a shared producer-side send-and-store integration with app-owned S3 storage for ordinary project mail. This aligns capture with the agreed deletion and 30-day recovery behavior. SES configuration-set archiving remains an evaluated fallback rather than the first choice; verification/reset delivery is excluded from capture. See ARCHITECTURE_PROPOSAL.md for coverage and failure-handling review points.
+The concrete proposal prefers a shared producer-side send-and-store integration with app-owned S3 storage for ordinary project mail. This aligns capture with the agreed deletion and 30-day recovery behavior. SES configuration-set archiving remains an evaluated fallback rather than the first choice; verification/reset delivery is excluded from capture. See ARCHITECTURE_PROPOSAL.md for the design baseline and [AUTOMATED_SENT.md](AUTOMATED_SENT.md) for the local implementation, applied local producer integrations, capture-before-send policy and rollout gates. Capture is not deployed.
 
 - Review each producer's audited send path and exact source/infrastructure changes before integrating the shared helper. Preserve recipients, templates, configuration sets, tags, and existing outcome handling.
 - Persist a complete message and send-attempt record in app-controlled storage, then import it asynchronously with domain, source, and environment labels. Validate HTML, inline images, attachments, failure handling, and deduplication.
@@ -92,7 +91,7 @@ Milestones are implementation order; all confirmed features remain in version-on
 - An enabled alias receives mail and can send; replies use the correct alias; unknown or disabled addresses do not become accepted catch-all mailboxes.
 - Alias updates are recoverable if receiving-rule synchronization fails. A change never erases old messages or changes another project's sender silently.
 - Rich HTML and inline images survive sending, receiving, forwarding, reopening drafts, and viewing on desktop/phone. Hostile HTML cannot access the app session.
-- Automated project mail appears once in the correct Sent folder, with its complete content and distinguishable delivery status. Integration does not interrupt existing project delivery.
+- Automated project mail appears once in the correct Sent folder, with its complete content and distinguishable delivery status. Existing delivery settings and guards are preserved; the chosen capture-before-send policy may delay ordinary mail during capture-storage outages.
 - Search finds both received and sent content, including older messages, within the chosen address. Threading does not merge unrelated conversations.
 - Replayed inbound events and ambiguous outbound responses do not cause duplicate messages or automatic duplicate sends.
 - With permissions granted and platform setup completed, new mail produces a background push on the target devices and opens the correct message. Mail remains accessible if notification delivery fails.
@@ -105,17 +104,15 @@ Milestones are implementation order; all confirmed features remain in version-on
 - Expected future mail/attachment growth remains uncertain. Low cost is confirmed as a priority; the proposed budget and explicit assumptions are in ARCHITECTURE_PROPOSAL.md and planning/cost_inputs.json.
 - Discovery now establishes a low-volume baseline: 3 production and 87 staging account-level Send events in the last 30 complete UTC days; 3 current support-storage objects totaling 10,530 bytes. These are not a per-domain forecast. Finalize the monthly budget after selecting search/session/archive details; full findings and cost boundaries are in AWS_AUDIT.md.
 - Whether contact-form delivery should additionally appear as an Inbox inquiry; current confirmed scope includes capturing its outbound delivery in Sent.
-- Sender display names/default aliases and exact private URL. These can be settled during interface/setup review.
-- Validate the proposed DSQL word index, app-owned capture, session design, CloudFront Free-plan compatibility, and backup cleanup. The recovery-window preference is resolved as 30 days; implementation and operating cost still need verification.
+- Review the seeded sender display names/default aliases as needed. The private URL is settled: https://inbox.example.com.
+- The DSQL word index and direct Google session design are implemented. ExampleOrg staging capture and measured operating costs remain (website production capture is live); production backup rollout/restore verification is complete within the documented same-account/region scope. Production uses standard CloudFront usage pricing; no Free-plan saving is assumed. The recovery-window maximum is 30 days.
 - Future domain onboarding: configure infrastructure for new domains first; decide later whether the app should guide DNS/domain verification itself.
-
-The local interaction prototype is implemented. Continue incorporating user review, then validate the proposed database/search and hosting configuration and review concrete infrastructure/source integrations before live changes.
 
 ## Current implementation
 
-The local frontend supports domain/address-tab/folder navigation, safe threaded reading, rich compose with files/inline images, alias-aware replies, forwarding, browser-persisted drafts, indexed word/phrase search, source/environment filters, folder moves/undo, explicit deletion, address management, and notification/settings previews. The local server runs on 127.0.0.1:4317; Node.js is sufficient to run/build it without installation. The checks cover model behavior and isolated Chrome browser journeys, including mailbox isolation and workspace colours. Default text has been changed to dark grey following review; spelling currently uses native browser/OS support.
+The local prototype and shared sample staging are implemented. Production has the owner-only gateway, real SES ingestion and sending, alias-scoped mailboxes, attachments, server drafts, threading, indexed word/phrase search, folder/read changes, deletion tombstones, and inline last-reference purge. `support@example.org` currently also reaches ExampleOrg's legacy `StoreSupport` rule.
 
-Four earlier server modules remain a partial single-sender/shared-mailbox scaffold. Production authentication/mail integration, the relational DSQL mail repository, background push, and verified backups remain pending; the separate hosted stage has Google sign-in and a DSQL/S3 sample-storage bridge. Sample-stage deletion tombstones, 29-day cleanup, and additive recovery are deployed to staging (October 28, 2026); they prototype the production retention requirements in BACKEND_STORAGE.md without satisfying them. Source is tracked in the private [mdelairi/ses-inbox](https://github.com/mdelairi/ses-inbox) GitHub repository. See README.md for exact local scope and checks.
+ExampleOrg staging Sent capture, background push, in-app production alias management, automatic refresh and complete pagination remain outstanding. Production backup/restore and hourly retention maintenance are deployed and cloud-verified for same-account/region recovery. Launch acceptance evidence and actual operating costs are incomplete. [PROJECT_STATUS.md](PROJECT_STATUS.md) tracks these items and separates implemented code from live verification. Production-data and synthetic cloud recovery/retention drills now pass; their scope and operational limits are documented in PRODUCTION_RECOVERY.md.
 
 ## References consulted
 

@@ -137,3 +137,15 @@ CREATE TABLE IF NOT EXISTS mail.send_attempts (
 );
 CREATE UNIQUE INDEX ASYNC IF NOT EXISTS send_attempts_ses ON mail.send_attempts(ses_message_id);
 CREATE INDEX ASYNC IF NOT EXISTS send_attempts_message ON mail.send_attempts(domain_id, message_id);
+
+-- Durable last-reference retirement fence. Keep it after cleanup to block stale publication.
+CREATE TABLE IF NOT EXISTS mail.purge_jobs (
+  domain_id UUID NOT NULL,
+  message_id UUID NOT NULL,
+  deleted_at TIMESTAMP NOT NULL,
+  purge_after TIMESTAMP NOT NULL,
+  content_removed BOOLEAN NOT NULL,
+  complete BOOLEAN NOT NULL,
+  revision INTEGER NOT NULL,
+  PRIMARY KEY (domain_id, message_id)
+);

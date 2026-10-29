@@ -1,0 +1,56 @@
+{
+  "producerFilesChanged": true,
+  "edits": [
+    {
+      "project": "exampleorg",
+      "path": "library/server/invitation-mail.mjs",
+      "sourceSha256": "dea4beac08676bd7098b3606f2c403dd9325601000c4a5aae80ad58f8086bcff",
+      "proposedSha256": "62ccb0ae4e9356b4e4b4cf16d13987713633e2a1ea0964a213b74f1c428414f1",
+      "applied": true
+    },
+    {
+      "project": "exampleorg",
+      "path": "library/server/learning-mail.mjs",
+      "sourceSha256": "f9a68003c48643e603eefc3d225d07de2ba62a080266ea04e0470908297805f9",
+      "proposedSha256": "60dc3e9b30f34ca50ac6eb95f523a5a29ffb63542833c466239befbf10636b86",
+      "applied": true
+    },
+    {
+      "project": "exampleorg",
+      "path": "infra/delivery-stack.ts",
+      "sourceSha256": "8d8fc30b9979d9108ca2e5bb670dbfba32d7bea683cf80fbf7e55e4d768d008f",
+      "proposedSha256": "50558f65393901e5ba16c847fa5001401539e67d818eb6146885df0d14f49863",
+      "applied": false
+    },
+    {
+      "project": "website",
+      "path": "functions/contact/handler.ts",
+      "sourceSha256": "abcf36c0712ced161f3cd0f4eeed8f3420e5b31e4b31ed38975c3eb544758d94",
+      "proposedSha256": "d243d80d224e6890e7bf58f115e8b20f88b87ec1b56c0f80caa68e7f00987f25",
+      "applied": true
+    },
+    {
+      "project": "website",
+      "path": "infra/contact-stack.ts",
+      "sourceSha256": "38878dc7446004ac31aa924f92fc7f98f023f5852973000dcfb1e63882c3f7d2",
+      "proposedSha256": "451544fb3cd35af27901125a0fe4a062691d4a3ba000e46ff9aa064a1ba6b532",
+      "applied": true
+    }
+  ],
+  "newFiles": {
+    "exampleorg": [
+      "library/server/inbox-capture.mjs",
+      "library/server/inbox-capture/producer.mjs",
+      "library/server/inbox-capture/protocol.mjs"
+    ],
+    "website": [
+      "functions/contact/inbox-capture.ts",
+      "functions/contact/inbox-capture/producer.mjs",
+      "functions/contact/inbox-capture/protocol.mjs"
+    ]
+  },
+  "newDependency": {
+    "exampleorg": "@aws-sdk/client-s3 already present",
+    "website": "@aws-sdk/client-s3: match existing AWS SDK version 3.1141.0"
+  }
+}

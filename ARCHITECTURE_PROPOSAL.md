@@ -1,5 +1,7 @@
 # Low-cost inbox architecture proposal
 
+> Historical design proposal. Production is now live using direct Google OIDC, DSQL and SES. Consult [PRODUCTION.md](PRODUCTION.md) for deployed behavior and [PROJECT_STATUS.md](PROJECT_STATUS.md) for remaining work; earlier launch blockers below are not a current status report.
+
 October 26, 2026 · For review before implementation. This document proposes the design; it does not authorize deployment or changes to other projects.
 
 ## Recommendation and budget

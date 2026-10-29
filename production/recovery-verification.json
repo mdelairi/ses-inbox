@@ -1,0 +1,131 @@
+{
+  "verifiedOn": "2026-10-28T22:03:03.377335+00:00",
+  "accountId": "111111111111",
+  "region": "us-east-1",
+  "appLambdaSha256": "a7f4622f7be8092718beef40239dfcdbc74f30bfb09264f2bc4bd1f5c3d93ed0",
+  "maintenanceLambdaSha256": "d2ede586cae860de5728551e31f5900a0aa5445c1362f414c2124bc652506c16",
+  "firstBackup": {
+    "key": "snapshots/1793206322541-1a705252-2a48-4ad2-90ad-92784f1a07fd/manifest.json",
+    "messages": 8,
+    "objects": 24,
+    "bytes": 50871
+  },
+  "cloudRestore": {
+    "snapshot": "snapshots/1793206322541-1a705252-2a48-4ad2-90ad-92784f1a07fd/manifest.json",
+    "counts": {
+      "domains": 2,
+      "aliases": 4,
+      "messages": 8,
+      "message_ids": 8,
+      "mailbox_entries": 8,
+      "search_positions": 176,
+      "drafts": 0,
+      "deletion_tombstones": 1,
+      "ingestion_receipts": 8,
+      "send_attempts": 1,
+      "purge_jobs": 0
+    },
+    "messagesReadAcrossAliases": 8,
+    "attachmentsRead": 0,
+    "sqlDigestsMatched": true,
+    "runtimeRolesAbsent": true,
+    "objectsVerifiedByRestore": true
+  },
+  "syntheticCloudDrill": {
+    "verifiedOn": "2026-10-28T17:02:32.535Z",
+    "deletionLedgerBlocksResurrection": true,
+    "sharedAliasRetained": true,
+    "lastReferencePurgeRetried": true,
+    "physicalVersionsRemovedAtDeadline": true,
+    "currentSpamRetained": true,
+    "richHtmlInlinePartsRestored": true,
+    "draftAndUploadRestored": true,
+    "searchAndDomainIsolation": true,
+    "partialRestore": {
+      "messages": 2,
+      "entries": 2,
+      "drafts": 1,
+      "objects": 12,
+      "blocked": 1,
+      "applied": true
+    },
+    "finalRestore": {
+      "messages": 1,
+      "entries": 1,
+      "drafts": 1,
+      "objects": 7,
+      "blocked": 2,
+      "applied": true
+    },
+    "retry": {
+      "purged": 1,
+      "versions": 0,
+      "completed": 0
+    },
+    "deadline": {
+      "purged": 0,
+      "versions": 12,
+      "completed": 1
+    }
+  },
+  "schedule": {
+    "state": "ENABLED",
+    "expression": "rate(1 hour)",
+    "acceleratedVerificationRuns": 295,
+    "firstVerifiedRun": "2026-10-28T17:04:41.597000+00:00",
+    "lastCapturedVerifiedRun": "2026-10-28T21:58:40.583000+00:00",
+    "maintenanceErrorLogEvents": 0,
+    "naturalHourlyRunObserved": false
+  },
+  "alarms": [
+    {
+      "Name": "project-inbox-prod-recovery-BackupAgeAlarm-EXAMPLE",
+      "State": "OK"
+    },
+    {
+      "Name": "project-inbox-prod-recovery-EXAMPLE-wrKjkUEPHe0i",
+      "State": "OK"
+    },
+    {
+      "Name": "project-inbox-prod-recovery-HeartbeatAlarm-EXAMPLE",
+      "State": "OK"
+    },
+    {
+      "Name": "project-inbox-prod-recovery-RecoveryDLQAlarm-EXAMPLE",
+      "State": "OK"
+    }
+  ],
+  "latestDeletionPreview": {
+    "messages": 2,
+    "entries": 2,
+    "drafts": 0,
+    "objects": 6,
+    "blocked": 6,
+    "applied": false
+  },
+  "temporaryDrillCleanup": {
+    "stack": "project-inbox-recovery-drill-1793206143756",
+    "status": "DELETE_COMPLETE",
+    "bucketAbsent": true,
+    "clusterAbsent": true,
+    "versionsDeleted": 40
+  },
+  "checks": {
+    "nodeTests": 80,
+    "googleTokenTests": 3,
+    "pythonProbeTests": 7,
+    "browserJourneys": 14,
+    "cfnLintPassed": true,
+    "s3ManagedGuardRulesPassed": 5,
+    "preDeploymentValidationFindings": 0,
+    "signedOutRedirect": 303,
+    "unsignedApi": 401,
+    "directOrigin": 403
+  },
+  "limitations": [
+    "Same AWS account and region; not account-wide or regional disaster recovery.",
+    "Approximate daily cadence: first hourly pass at least 24 hours after the last complete snapshot, normally a 24\u201325-hour interval.",
+    "A natural hourly interval was not waited out; scheduled execution was observed using the same rule/target at an accelerated cadence before setting it to hourly.",
+    "Retention deadlines require healthy maintenance; failures alarm and need repair."
+  ]
+}

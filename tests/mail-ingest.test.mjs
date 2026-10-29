@@ -84,11 +84,11 @@ test('a crashed attempt is retried under a new generation after its lease expire
 });
 test('tombstoned aliases are not re-delivered; unparseable mail fails permanently', { skip }, async () => {
   const t = await setup(), n = await t.deliver(['info@example.com', 'taylor@example.com']);
-  const claim = await t.repo.claimReceipt({ domainId: example, receiptKey: 'probe', now: Date.now() });
+  const claim = await t.repo.claimReceipt({ domainId: example, receiptKey: 'probe', now: Date.parse('2026-10-28T12:00:00Z') });
   await t.rows('INSERT INTO mail.deletion_tombstones VALUES($1,$2,$3,now())', [example, ids.taylor, claim.messageId]);
   // Same message id is only reused by the same receipt, so tombstone that receipt's id.
   const realKey = (await import('node:crypto')).createHash('sha256').update(`${n.mail.messageId}\n${n.receipt.action.objectKey}\n${example}`).digest('hex');
-  const real = await t.repo.claimReceipt({ domainId: example, receiptKey: realKey, now: Date.now() });
+  const real = await t.repo.claimReceipt({ domainId: example, receiptKey: realKey, now: Date.parse('2026-10-28T12:00:00Z') });
   await t.rows('INSERT INTO mail.deletion_tombstones VALUES($1,$2,$3,now())', [example, ids.taylor, real.messageId]);
   t.tick(6 * 60000);
   assert.deepEqual((await t.ingest(n)).results[0].delivered, [ids.info]);

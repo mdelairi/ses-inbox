@@ -1,0 +1,25 @@
+--- a/infra/delivery-stack.ts
++++ b/infra/delivery-stack.ts
+@@ -165,6 +165,22 @@
+       f.addEnvironment('LIVE_EVENTS_HTTP', liveEvents.httpDns);
+       f.addEnvironment('LIVE_EVENTS_REALTIME', liveEvents.realtimeDns);
+       f.addEnvironment('LIVE_EVENTS_KEY', liveEvents.apiKeys.players.attrApiKey);
++    }
++    // Opt-in capture only; never enable email sending or alter existing recipient safeguards.
++    const inboxCaptureBucket = this.node.tryGetContext('inboxCaptureBucket');
++    if (inboxCaptureBucket) {
++      if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(inboxCaptureBucket))
++        throw new Error('Invalid inbox capture bucket');
++      fn.addEnvironment('INBOX_CAPTURE_BUCKET', inboxCaptureBucket);
++      fn.addEnvironment('INBOX_CAPTURE_SOURCE', production ? 'exampleorg-production' : 'exampleorg-staging');
++      fn.addToRolePolicy(
++        new PolicyStatement({
++          actions: ['s3:PutObject'],
++          resources: [
++            `arn:aws:s3:::${inboxCaptureBucket}/capture/${production ? 'exampleorg-production' : 'exampleorg-staging'}/*`,
++          ],
++        }),
++      );
+     }
+     // Opt-in capture only; never enable email sending or alter existing recipient safeguards.
+     const inboxCaptureBucket = this.node.tryGetContext('inboxCaptureBucket');

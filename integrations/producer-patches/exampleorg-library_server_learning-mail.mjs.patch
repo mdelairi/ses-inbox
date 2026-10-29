@@ -1,0 +1,55 @@
+--- a/library/server/learning-mail.mjs
++++ b/library/server/learning-mail.mjs
+@@ -1,3 +1,4 @@
++import { sendProjectEmail } from './inbox-capture.mjs';
+ import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
+ import { minutesLabel } from '../shared/outcomes.mjs';
+ import { DIGEST, DIGEST_NOTE, MARKING, answersLabel, weekLabel } from './digests.mjs';
+@@ -24,11 +25,12 @@
+ }) {
+   const settings = configuration.onboarding || {},
+     allowed = new Set((settings.allowedRecipients || []).map((x) => x.toLowerCase()));
+-  const send = async ({ to, email, tags = [] }) => {
++  const send = async ({ to, email, tags = [], captureKind }) => {
+     if (!settings.emailEnabled || !settings.replyTo || !allowed.has(to.toLowerCase())) return { state: 'skipped' };
+     if (await repo.invitationSuppressed(to.toLowerCase())) return { state: 'skipped' };
+     try {
+-      const sent = await client.send(
++      const sent = await sendProjectEmail(
++        { configuration, client, kind: captureKind },
+         new SendEmailCommand({
+           FromEmailAddress: '"ExampleOrg" <no-reply@example.org>',
+           ReplyToAddresses: [settings.replyTo],
+@@ -47,7 +49,7 @@
+       return { state: sent.MessageId ? 'accepted' : 'uncertain', messageId: sent.MessageId };
+     } catch (error) {
+       console.warn('Email not sent:', JSON.stringify({ provider: error.name }));
+-      return { state: 'failed' };
++      return { state: error.name === 'CaptureBeforeSendError' && !error.notSent ? 'uncertain' : 'failed' };
+     }
+   };
+   send.prefix = configuration.environment === 'production' ? '' : '[STAGING] ';
+@@ -136,6 +138,15 @@
+   return async (reminder) =>
+     send({
+       to: reminder.to,
++      captureKind: {
++        assigned: 'course_assigned',
++        before: 'due_reminder',
++        'overdue-1': 'overdue_reminder',
++        'overdue-2': 'overdue_reminder',
++        'overdue-3': 'overdue_reminder',
++        [DIGEST]: 'weekly_digest',
++        [MARKING]: 'marking_waiting',
++      }[reminder.kind],
+       email: await (LEARNING_EMAILS[reminder.kind] || reminderEmail)(repo, reminder, send),
+       tags: [{ Name: 'reminder', Value: reminder.kind }],
+     });
+@@ -163,6 +174,7 @@
+   return async (delivery, linkOrigin) => {
+     const result = await send({
+       to: delivery.email,
++      captureKind: 'course_invitation',
+       email: await courseInvitationEmail(repo, delivery, { ...send, linkOrigin }),
+       tags: [{ Name: 'course-invitation', Value: delivery.id }],
+     });

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applicationTemplate, artifactTemplate, certificateTemplate, receivingTemplate, storageTemplate, RECEIPT_RULE_SET } from '../infra/production.mjs';
+import { applicationTemplate, artifactTemplate, certificateTemplate, receivingTemplate, recoveryTemplate, storageTemplate, RECEIPT_RULE_SET } from '../infra/production.mjs';
 
-const all = () => [artifactTemplate(), certificateTemplate(), storageTemplate(), applicationTemplate(), receivingTemplate()];
+const all = () => [artifactTemplate(), certificateTemplate(), storageTemplate(), applicationTemplate(), receivingTemplate(), recoveryTemplate()];
 const statements = role => role.Properties.Policies.flatMap(policy => policy.PolicyDocument.Statement);
 
 test('templates fit inline limits, every reference resolves, and data is retained', () => {
@@ -62,4 +62,16 @@ test('the receipt rule targets exact recipients in the existing rule set and nev
   assert.equal(rule.Rule.Actions[0].S3Action.ObjectKeyPrefix, 'incoming/');
   assert.equal(rule.Rule.TlsPolicy, 'Require'); assert.equal(rule.Rule.ScanEnabled, true);
   assert.match(receivingTemplate().Parameters.RuleName.AllowedPattern, /^\^project-inbox-/);
+});
+
+test('recovery is private, separate, disabled until verified and cannot send or delete the ledger', () => {
+  const template = recoveryTemplate(), resources = template.Resources;
+  assert.equal(template.Parameters.MaintenanceState.Default, 'DISABLED');
+  assert.equal(resources.Backups.DeletionPolicy, 'Retain');
+  assert.ok(Object.values(resources.Backups.Properties.PublicAccessBlockConfiguration).every(Boolean));
+  assert.equal(resources.Maintenance.Properties.ReservedConcurrentExecutions, 1);
+  const policy = statements(resources.MaintenanceRole);
+  assert.doesNotMatch(JSON.stringify(policy), /ses:|DbConnectAdmin|iam:|route53:/);
+  for (const statement of policy.filter(row => row.Action?.some(action => action.startsWith('s3:Delete')))) assert.doesNotMatch(JSON.stringify(statement.Resource), /tombstones/);
+  assert.ok(policy.every(row => row.Resource !== '*'));
 });

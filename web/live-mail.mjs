@@ -88,7 +88,7 @@ export async function loadState() {
   const domains = new Map();
   for (const alias of aliases) {
     if (!domains.has(alias.domain)) domains.set(alias.domain, { id: alias.domain, name: alias.domainLabel, initial: alias.domainLabel.slice(0, 1).toUpperCase(), color: COLORS[alias.domain] || '#426859', aliases: [] });
-    domains.get(alias.domain).aliases.push({ id: alias.address, address: alias.address, name: alias.name, enabled: alias.sendEnabled, receiveEnabled: alias.receiveEnabled, default: alias.default, signature: alias.signature });
+    domains.get(alias.domain).aliases.push({ id: alias.address, address: alias.address, name: alias.name, enabled: alias.sendEnabled, receiveEnabled: alias.receiveEnabled, captured: !alias.receiveEnabled && !alias.sendEnabled, default: alias.default, signature: alias.signature });
   }
   const messages = new Map();
   for (const entry of entries) {

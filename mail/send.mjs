@@ -14,8 +14,8 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 // Rejections SES reports definitively; anything else (timeouts, 5xx) has an unknown outcome.
 const DEFINITE = new Set(['MessageRejected', 'MailFromDomainNotVerifiedException', 'AccountSuspendedException', 'SendingPausedException', 'BadRequestException', 'NotFoundException', 'LimitExceededException', 'TooManyRequestsException']);
 // Final state wins over interim ones; a late DeliveryDelay never downgrades a delivery.
-const RANK = { sending: 0, sent: 1, delayed: 2, delivered: 3, bounced: 4, complained: 4, rejected: 4, failed: 4, uncertain: 1 };
-const EVENT_STATES = { Delivery: 'delivered', Bounce: 'bounced', Complaint: 'complained', Reject: 'rejected', DeliveryDelay: 'delayed', RenderingFailure: 'failed' };
+export const SEND_STATE_RANK = { sending: 0, sent: 1, delayed: 2, delivered: 3, bounced: 4, complained: 4, rejected: 4, failed: 4, uncertain: 1 };
+const EVENT_STATES = { Send: 'sent', Delivery: 'delivered', Bounce: 'bounced', Complaint: 'complained', Reject: 'rejected', DeliveryDelay: 'delayed', RenderingFailure: 'failed' };
 
 function recipients(list) {
   const values = (Array.isArray(list) ? list : []).map(item => String(item).trim().toLowerCase()).filter(Boolean);
@@ -93,7 +93,7 @@ export function createSender({ pool, objects, ses, mailbox, bucket, configuratio
     },
 
     // SES configuration-set events (via SNS). Unknown message ids are ignored: other senders share events.
-    async recordEvent(event) {
+    async recordEvent(event, scope) {
       const state = EVENT_STATES[event?.eventType];
       const sesMessageId = event?.mail?.messageId;
       if (!state || !sesMessageId) return { ignored: true };
@@ -101,9 +101,17 @@ export function createSender({ pool, objects, ses, mailbox, bucket, configuratio
         : event.complaint ? `Complaint from ${(event.complaint.complainedRecipients || []).map(item => item.emailAddress).join(', ')}`
         : event.reject?.reason || event.failure?.errorMessage || null;
       for (let attempt = 0; attempt < 4; attempt++) {
-        const { rows: [row] } = await pool.query('SELECT domain_id, attempt_id, state, revision FROM mail.send_attempts WHERE ses_message_id=$1', [sesMessageId]);
+        const { rows: [row] } = scope
+          ? await pool.query('SELECT domain_id, attempt_id, state, revision, ses_message_id FROM mail.send_attempts WHERE domain_id=$1 AND attempt_id=$2', [scope.domainId, scope.attemptId])
+          : await pool.query('SELECT domain_id, attempt_id, state, revision, ses_message_id FROM mail.send_attempts WHERE ses_message_id=$1', [sesMessageId]);
         if (!row) return { ignored: true };
-        if (RANK[state] < RANK[row.state] || (RANK[state] === RANK[row.state] && state === row.state)) return { state: row.state };
+        if (row.ses_message_id && row.ses_message_id !== sesMessageId) throw new Error('CaptureProviderIdConflict');
+        if (scope && !row.ses_message_id) {
+          const result = await pool.query('UPDATE mail.send_attempts SET ses_message_id=$3, revision=revision+1 WHERE domain_id=$1 AND attempt_id=$2 AND revision=$4', [row.domain_id, row.attempt_id, sesMessageId, row.revision]);
+          if (!result.rowCount) continue;
+          row.revision++;
+        }
+        if (SEND_STATE_RANK[state] < SEND_STATE_RANK[row.state] || (SEND_STATE_RANK[state] === SEND_STATE_RANK[row.state] && state === row.state)) return { state: row.state };
         const { rowCount } = await pool.query('UPDATE mail.send_attempts SET state=$3, detail=$4, updated_at=$5, revision=revision+1 WHERE domain_id=$1 AND attempt_id=$2 AND revision=$6',
           [row.domain_id, row.attempt_id, state, detail ? detail.slice(0, 500) : null, new Date(now()).toISOString(), row.revision]);
         if (rowCount) return { state };

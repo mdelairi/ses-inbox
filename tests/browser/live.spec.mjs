@@ -5,6 +5,9 @@ import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { createStageHandler, hash, sessionCookie } from '../../stage/auth.mjs';
 import { createMailApi } from '../../mail/api.mjs';
+import { createCapturedSender } from '../../capture/producer.mjs';
+import { createCaptureImporter } from '../../mail/capture-import.mjs';
+import { versionedObjects } from '../helpers/versioned-mail-objects.mjs';
 import { parseMessage } from '../../mail/parse.mjs';
 import { postgresAvailable, startPostgres } from '../helpers/postgres.mjs';
 import { bucket, mailFixture } from '../helpers/mail-fixture.mjs';
@@ -74,7 +77,7 @@ test('real mail: read with inline images, reply, archive, and server search', as
 
   await page.getByRole('button', { name: 'Sent', exact: true }).click();
   await page.getByRole('button', { name: 'Open Re: Workshop dates', exact: true }).click();
-  // The fixture's incoming mail is dated ahead of this machine's clock, so check the conversation header.
+  // Folder labels are stable regardless of the relative fixture and system clocks.
   await expect(page.locator('.reader-labels').getByText('Sent', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Inbox', exact: true }).click();
@@ -84,7 +87,8 @@ test('real mail: read with inline images, reply, archive, and server search', as
   await expect.poll(async () => (await db.pool.query("SELECT folder FROM mail.mailbox_entries e JOIN mail.messages m USING (domain_id, message_id) WHERE m.subject='Workshop dates'")).rows.map(row => row.folder)).toEqual(['archive']);
 
   await page.locator('#mail-search').fill('invoices');
-  await expect(page.getByRole('button', { name: 'Open Workshop dates', exact: true })).toBeVisible();
+  // Search groups the original and reply; its row title follows the newest message.
+  await expect(page.getByRole('button', { name: /^Open (Re: )?Workshop dates$/ })).toBeVisible();
   await page.locator('#mail-search').fill('nothingmatches');
   await expect(page.getByText('No matching conversations')).toBeVisible();
   expect(errors).toEqual([]);
@@ -103,4 +107,23 @@ test('real mail: drafts save to the server and survive a reload; sample tools ar
   await page.getByRole('button', { name: 'Aliases & settings' }).click();
   await page.getByRole('button', { name: 'Add address' }).click();
   await expect(page.locator('.toast').filter({ hasText: 'Addresses are managed in the mail setup for now.' })).toBeVisible();
+});
+
+test('automated capture uses a read-only sender mailbox and shows staging/source labels', async ({ context, page }) => {
+  await live(context, page, async f => {
+    const captureObjects = versionedObjects(), source = 'exampleorg-staging', id = 'e5d7ab9f-78bc-4ac7-9e0c-35807fe0ec10';
+    const send = createCapturedSender({ source, put: (key, value) => captureObjects.put(key, JSON.stringify(value)), send: async () => ({ MessageId: 'captured-provider' }) });
+    await send({ id, kind: 'course_assigned', input: { FromEmailAddress: 'ExampleOrg <no-reply@example.org>', Destination: { ToAddresses: ['learner@example.invalid'] }, Content: { Simple: { Subject: { Data: 'Your assigned workshop' }, Body: { Text: { Data: 'A workshop was assigned to you.' } } } } } });
+    await createCaptureImporter({ pool: db.pool, objects: f.objects, captureObjects, bucket }).ingest(source, id);
+  });
+  await page.getByRole('button', { name: 'Switch domain: example.com' }).click();
+  await page.getByRole('button', { name: /example.org/ }).click();
+  await page.getByRole('tab', { name: 'Open mailbox no-reply@example.org' }).click();
+  await expect(page.getByRole('button', { name: 'Compose', exact: true }).first()).toBeDisabled();
+  await page.getByRole('button', { name: 'Sent', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Open Your assigned workshop', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Open Your assigned workshop', exact: true }).click();
+  await expect(page.getByText('Automated', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Staging', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reply', exact: true })).toBeDisabled();
 });

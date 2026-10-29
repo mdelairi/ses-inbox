@@ -36,7 +36,7 @@ export function storageTemplate() {
   return { ...base('Production mail storage, database, queues and SES event publishing. All data is retained.'), Parameters: { Environment: environment, Hostname: hostname }, Resources: {
     Mail: resource('AWS::S3::Bucket', { ...privateBucket,
       CorsConfiguration: { CorsRules: [{ AllowedOrigins: [sub('https://${Hostname}')], AllowedMethods: ['GET', 'PUT', 'HEAD'], AllowedHeaders: ['*'], ExposedHeaders: ['ETag'], MaxAge: 300 }] },
-      // 29 days keeps asynchronous lifecycle expiry inside the 30-day post-deletion recovery limit.
+      // Lifecycle is an asynchronous backstop; the recovery maintenance job enforces deadlines.
       LifecycleConfiguration: { Rules: [{ Id: 'RecoveryVersions', Status: 'Enabled', NoncurrentVersionExpiration: { NoncurrentDays: 29 }, AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 } },
         { Id: 'IntakeBuffer', Status: 'Enabled', Prefix: 'incoming/', ExpirationInDays: 14, NoncurrentVersionExpiration: { NoncurrentDays: 1 } }] }, Tags: tags },
     'Raw intake (incoming/), filed messages with their raw copy (mail/), drafts and uploads', ['Retain on replacement/deletion', 'Only incoming/ expires; the worker files a copy within the 14-day dead-letter window', 'Owner-signed short-lived URLs only'], retain),
@@ -82,6 +82,8 @@ export function applicationTemplate() {
       { Effect: 'Allow', Action: ['secretsmanager:GetSecretValue'], Resource: ref('GoogleSecretArn') },
       { Effect: 'Allow', Action: ['logs:CreateLogStream', 'logs:PutLogEvents'], Resource: get('Logs', 'Arn') },
       { Effect: 'Allow', Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'], Resource: mailObjects(['mail', 'drafts', 'uploads']) },
+      { Effect: 'Allow', Action: ['s3:PutObject'], Resource: mailObjects(['tombstones']) },
+      { Effect: 'Allow', Action: ['s3:ListBucket'], Resource: sub('arn:${AWS::Partition}:s3:::${MailBucket}'), Condition: { StringLike: { 's3:prefix': 'mail/*' } } },
       { Effect: 'Allow', Action: ['dsql:DbConnect'], Resource: ref('MailDatabaseArn') },
       { Effect: 'Allow', Action: ['ses:SendEmail', 'ses:SendRawEmail'], Resource: [...SENDING_DOMAINS.map(domain => sub(`arn:\${AWS::Partition}:ses:\${AWS::Region}:\${AWS::AccountId}:identity/${domain}`)), sub('arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${ConfigurationSet}')],
         Condition: { StringLike: { 'ses:FromAddress': SENDING_DOMAINS.map(domain => `*@${domain}`) } } },
@@ -114,7 +116,7 @@ export function applicationTemplate() {
     InvokePermission: resource('AWS::Lambda::Permission', { FunctionName: get('App', 'Arn'), Action: 'lambda:InvokeFunction', Principal: 'cloudfront.amazonaws.com', SourceArn: distributionArn, InvokedViaFunctionUrl: true }, 'Second permission required by function URL authorization'),
   }, Outputs: {
     DistributionId: { Value: ref('Distribution') }, DistributionDomain: { Value: get('Distribution', 'DomainName') }, FunctionUrl: { Value: get('AppUrl', 'FunctionUrl') },
-    AuthTable: { Value: ref('Sessions') }, AppRoleArn: { Value: get('AppRole', 'Arn') }, WorkerRoleArn: { Value: get('WorkerRole', 'Arn') },
+    AlarmTopicArn: { Value: ref('Alarms') }, AuthTable: { Value: ref('Sessions') }, AppRoleArn: { Value: get('AppRole', 'Arn') }, WorkerRoleArn: { Value: get('WorkerRole', 'Arn') },
   } };
 }
 
@@ -129,4 +131,47 @@ export function receivingTemplate() {
     Rule: resource('AWS::SES::ReceiptRule', { RuleSetName: RECEIPT_RULE_SET, Rule: { Name: ref('RuleName'), Enabled: true, TlsPolicy: 'Require', ScanEnabled: true, Recipients: ref('Recipients'),
       Actions: [{ S3Action: { BucketName: ref('MailBucket'), ObjectKeyPrefix: 'incoming/', TopicArn: ref('InboundTopicArn') } }] } }, 'Store and announce mail for the listed inbox addresses only', ['Stay ahead of ExampleOrg\'s StoreSupport, which ends with Stop; support@example.org is listed for its cutover', 'No Stop action, so other rules still see unrelated mail']),
   } };
+}
+
+// Separate stack: deploying these resources does not enable cleanup until schema,
+// grants and an isolated drill have passed. Existing stateful resources are untouched.
+export function recoveryTemplate() {
+  const sourceObjects = prefixes => prefixes.map(prefix => sub(`arn:\${AWS::Partition}:s3:::\${MailBucket}/${prefix}/*`));
+  const metric = name => ({ Namespace: 'ProjectInbox/ProductionRecovery', MetricName: name, Dimensions: [{ Name: 'Service', Value: 'mail' }] });
+  return { ...base('Production logical backups and retention reconciliation; restore uses isolated destinations only.'), Parameters: {
+    Environment: environment, ArtifactBucket: { Type: 'String', MinLength: 3 }, ArtifactKey: artifactKey,
+    MailBucket: { Type: 'String', MinLength: 3 }, MailDatabaseHost: { Type: 'String', AllowedPattern: '^[a-z0-9]+\\.dsql\\.us-east-1\\.on\\.aws$' },
+    MailDatabaseArn: { Type: 'String', AllowedPattern: '^arn:aws:dsql:us-east-1:[0-9]{12}:cluster/[a-z0-9]+$' },
+    AlarmTopicArn: { Type: 'String', AllowedPattern: '^arn:aws:sns:us-east-1:[0-9]{12}:.+$' },
+    CaptureBucket: { Type: 'String', Default: '', AllowedPattern: '^$|^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$', Description: 'Optional reviewed capture-intake bucket; physically sweep every version at 15 days' },
+    MaintenanceState: { Type: 'String', Default: 'DISABLED', AllowedValues: ['ENABLED', 'DISABLED'], Description: 'Enable after schema/grants and an isolated restore drill pass' },
+  }, Conditions: { HasCaptureBucket: { 'Fn::Not': [{ 'Fn::Equals': [ref('CaptureBucket'), ''] }] }, MaintenanceEnabled: { 'Fn::Equals': [ref('MaintenanceState'), 'ENABLED'] } }, Resources: {
+    Backups: resource('AWS::S3::Bucket', { ...privateBucket, LifecycleConfiguration: { Rules: [{ Id: 'BackupBackstop', Status: 'Enabled', ExpirationInDays: 29, NoncurrentVersionExpiration: { NoncurrentDays: 1 }, AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 } }] }, Tags: tags }, 'Independent self-contained SQL and content copies; unavailable to the app and worker', ['Private encrypted TLS-only', 'Maintenance physically deletes all versions at 29 days from snapshot start', 'No Object Lock beyond deletion window', 'Retain on stack deletion; cleanup must continue until copies expire'], retain),
+    BackupPolicy: resource('AWS::S3::BucketPolicy', { Bucket: ref('Backups'), PolicyDocument: { Version: '2012-10-17', Statement: [tlsOnly('Backups')] } }, 'Require TLS for recovery data'),
+    RecoveryLogs: resource('AWS::Logs::LogGroup', { RetentionInDays: 14, Tags: tags }, 'Counts and outcomes only; no mailbox content'),
+    RecoveryDLQ: resource('AWS::SQS::Queue', { SqsManagedSseEnabled: true, MessageRetentionPeriod: 1209600, Tags: tags }, 'Failed scheduled maintenance invocations', [], retain),
+    MaintenanceRole: resource('AWS::IAM::Role', { AssumeRolePolicyDocument: lambdaTrust, Policies: [{ PolicyName: 'InboxRecovery', PolicyDocument: { Version: '2012-10-17', Statement: [
+      { Effect: 'Allow', Action: ['logs:CreateLogStream', 'logs:PutLogEvents'], Resource: get('RecoveryLogs', 'Arn') },
+      { Effect: 'Allow', Action: ['dsql:DbConnect'], Resource: ref('MailDatabaseArn') },
+      { Effect: 'Allow', Action: ['s3:ListBucket', 's3:ListBucketVersions'], Resource: sub('arn:${AWS::Partition}:s3:::${MailBucket}'), Condition: { StringLike: { 's3:prefix': ['mail/*', 'drafts/*', 'uploads/*', 'incoming/*', 'tombstones/*'] } } },
+      { Effect: 'Allow', Action: ['s3:GetObject', 's3:GetObjectVersion'], Resource: sourceObjects(['mail', 'drafts', 'uploads', 'incoming', 'tombstones']) },
+      { Effect: 'Allow', Action: ['s3:PutObject'], Resource: sourceObjects(['mail', 'tombstones']) },
+      { Effect: 'Allow', Action: ['s3:DeleteObject', 's3:DeleteObjectVersion'], Resource: sourceObjects(['mail', 'drafts', 'uploads', 'incoming']) },
+      { Effect: 'Allow', Action: ['s3:ListBucket', 's3:ListBucketVersions'], Resource: get('Backups', 'Arn'), Condition: { StringLike: { 's3:prefix': 'snapshots/*' } } },
+      { Effect: 'Allow', Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObjectVersion'], Resource: sub('${Backups.Arn}/snapshots/*') },
+      { 'Fn::If': ['HasCaptureBucket', { Effect: 'Allow', Action: ['s3:ListBucketVersions'], Resource: sub('arn:${AWS::Partition}:s3:::${CaptureBucket}'), Condition: { StringLike: { 's3:prefix': 'capture/*' } } }, ref('AWS::NoValue')] },
+      { 'Fn::If': ['HasCaptureBucket', { Effect: 'Allow', Action: ['s3:DeleteObjectVersion'], Resource: sub('arn:${AWS::Partition}:s3:::${CaptureBucket}/capture/*') }, ref('AWS::NoValue')] },
+      { Effect: 'Allow', Action: ['sqs:SendMessage'], Resource: get('RecoveryDLQ', 'Arn') },
+    ] } }], Tags: tags }, 'Scoped recovery component; cannot send, change aliases or receiving, or delete the independent ledger', ['Database inbox_maintenance grants only', 'No DbConnectAdmin, IAM or DNS changes']),
+    Maintenance: resource('AWS::Lambda::Function', { Runtime: 'nodejs24.x', Architectures: ['arm64'], Handler: 'maintenance.handler', MemorySize: 1024, Timeout: 300, ReservedConcurrentExecutions: 1,
+      Role: get('MaintenanceRole', 'Arn'), Code: { S3Bucket: ref('ArtifactBucket'), S3Key: ref('ArtifactKey') }, LoggingConfig: { LogGroup: ref('RecoveryLogs') }, DeadLetterConfig: { TargetArn: get('RecoveryDLQ', 'Arn') },
+      Environment: { Variables: { MAIL_BUCKET: ref('MailBucket'), BACKUP_BUCKET: ref('Backups'), CAPTURE_BUCKET: ref('CaptureBucket'), MAIL_DATABASE_HOST: ref('MailDatabaseHost') } }, Tags: tags },
+    'Hourly purge reconciliation and raw preservation; daily consistent SQL/content backup', ['Never expire a retained current message', 'Complete manifest commits a backup', 'Fail and alarm on incomplete copies or deadlines', 'No app endpoint or restoration permission']),
+    Schedule: resource('AWS::Events::Rule', { ScheduleExpression: 'rate(1 hour)', State: ref('MaintenanceState'), Targets: [{ Arn: get('Maintenance', 'Arn'), Id: 'RecoveryMaintenance' }] }, 'Start disabled; enable only after schema, grants and drill'),
+    SchedulePermission: resource('AWS::Lambda::Permission', { FunctionName: ref('Maintenance'), Action: 'lambda:InvokeFunction', Principal: 'events.amazonaws.com', SourceArn: get('Schedule', 'Arn'), SourceAccount: ref('AWS::AccountId') }, 'Only this schedule invokes maintenance'),
+    FailureAlarm: resource('AWS::CloudWatch::Alarm', { Namespace: 'AWS/Lambda', MetricName: 'Errors', Dimensions: [{ Name: 'FunctionName', Value: ref('Maintenance') }], Statistic: 'Sum', Period: 300, EvaluationPeriods: 1, Threshold: 1, ComparisonOperator: 'GreaterThanOrEqualToThreshold', TreatMissingData: 'notBreaching', AlarmActions: [ref('AlarmTopicArn')] }, 'Catch failures including initialization and timeout'),
+    HeartbeatAlarm: resource('AWS::CloudWatch::Alarm', { Namespace: 'AWS/Lambda', MetricName: 'Invocations', Dimensions: [{ Name: 'FunctionName', Value: ref('Maintenance') }], Statistic: 'Sum', Period: 3600, EvaluationPeriods: 2, Threshold: 1, ComparisonOperator: 'LessThanThreshold', TreatMissingData: 'breaching', AlarmActions: [ref('AlarmTopicArn')] }, 'Two missed hourly invocations require attention; FailureAlarm covers unsuccessful runs', [], { Condition: 'MaintenanceEnabled' }),
+    BackupAgeAlarm: resource('AWS::CloudWatch::Alarm', { ...metric('BackupAgeHours'), Statistic: 'Maximum', Period: 3600, EvaluationPeriods: 1, Threshold: 26, ComparisonOperator: 'GreaterThanThreshold', TreatMissingData: 'breaching', AlarmActions: [ref('AlarmTopicArn')] }, 'Daily backup freshness; heartbeat detects missing maintenance', [], { Condition: 'MaintenanceEnabled' }),
+    RecoveryDLQAlarm: resource('AWS::CloudWatch::Alarm', { Namespace: 'AWS/SQS', MetricName: 'ApproximateNumberOfMessagesVisible', Dimensions: [{ Name: 'QueueName', Value: get('RecoveryDLQ', 'QueueName') }], Statistic: 'Maximum', Period: 300, EvaluationPeriods: 1, Threshold: 1, ComparisonOperator: 'GreaterThanOrEqualToThreshold', TreatMissingData: 'notBreaching', AlarmActions: [ref('AlarmTopicArn')] }, 'Failed asynchronous maintenance events'),
+  }, Outputs: { BackupBucket: { Value: ref('Backups') }, MaintenanceRoleArn: { Value: get('MaintenanceRole', 'Arn') }, MaintenanceFunction: { Value: ref('Maintenance') } } };
 }

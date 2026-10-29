@@ -1,8 +1,9 @@
 import { transaction } from './repository.mjs';
 import { parseQuery } from './text.mjs';
+import { recordDeletion, purgeMessage, RETENTION_MS } from './retention.mjs';
 
 export const FOLDERS = ['inbox', 'sent', 'archive', 'trash', 'spam'];
-const SEARCH_CANDIDATES = 500, PURGE_BATCH = 2000;
+const SEARCH_CANDIDATES = 500;
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 const placeholders = (values, offset) => values.map((_, i) => `$${i + 1 + offset}`).join(',');
 const utc = value => value == null ? null : new Date(String(value).replace(' ', 'T') + 'Z').toISOString();
@@ -37,26 +38,6 @@ export function createMailbox({ pool, objects }) {
     const latest = new Map();
     for (const row of rows) if (!latest.has(row.thread_id)) latest.set(row.thread_id, row);
     return threads.filter(item => latest.has(item.thread)).map(item => ({ ...summary(latest.get(item.thread)), count: item.count, unread: item.unread }));
-  }
-  // Removes a message nobody holds: stored objects, index and rows. DSQL caps a transaction
-  // at 3000 changed rows, so index positions go in bounded statements first.
-  async function purge(domainId, messageId) {
-    const { rows: [message] } = await pool.query(`SELECT object_manifest_key FROM mail.messages m WHERE domain_id=$1 AND message_id=$2
-      AND NOT EXISTS (SELECT 1 FROM mail.mailbox_entries e WHERE e.domain_id=m.domain_id AND e.message_id=m.message_id)`, [domainId, messageId]);
-    if (!message) return;
-    const manifest = JSON.parse(await objects.get(message.object_manifest_key));
-    // Older receipts point raw at incoming/, which expires by lifecycle and is not the app's to delete.
-    const keys = [...manifest.parts.map(part => part.key), manifest.body, manifest.raw?.key].filter(key => key?.startsWith(`mail/${domainId}/${messageId}/`));
-    for (const key of [...keys, message.object_manifest_key]) await objects.remove(key);
-    const { rows: groups } = await pool.query('SELECT generation, field, section, max(position) AS last FROM mail.search_positions WHERE domain_id=$1 AND message_id=$2 GROUP BY generation, field, section', [domainId, messageId]);
-    for (const group of groups) {
-      for (let below = PURGE_BATCH; below <= group.last + PURGE_BATCH; below += PURGE_BATCH) {
-        await pool.query('DELETE FROM mail.search_positions WHERE domain_id=$1 AND message_id=$2 AND generation=$3 AND field=$4 AND section=$5 AND position<$6', [domainId, messageId, group.generation, group.field, group.section, below]);
-      }
-    }
-    await transaction(pool, async client => {
-      for (const table of ['message_ids', 'send_attempts', 'messages']) await client.query(`DELETE FROM mail.${table} WHERE domain_id=$1 AND message_id=$2`, [domainId, messageId]);
-    });
   }
 
   return {
@@ -156,12 +137,17 @@ export function createMailbox({ pool, objects }) {
       const deleted = await transaction(pool, async client => {
         const { rows } = await client.query(`SELECT message_id FROM mail.mailbox_entries WHERE domain_id=$1 AND alias_id=$2 AND folder='trash' AND message_id IN (${placeholders(ids, 2)})`, [scope.domainId, scope.aliasId, ...ids]);
         for (const { message_id: id } of rows) {
+          await recordDeletion(objects, scope.domainId, scope.aliasId, id, new Date(now).toISOString());
           await client.query('DELETE FROM mail.mailbox_entries WHERE domain_id=$1 AND alias_id=$2 AND message_id=$3', [scope.domainId, scope.aliasId, id]);
           await client.query('INSERT INTO mail.deletion_tombstones(domain_id,alias_id,message_id,deleted_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [scope.domainId, scope.aliasId, id, new Date(now).toISOString()]);
+          if (!(await client.query('SELECT 1 FROM mail.mailbox_entries WHERE domain_id=$1 AND message_id=$2 LIMIT 1', [scope.domainId, id])).rowCount) {
+            await client.query('INSERT INTO mail.purge_jobs(domain_id,message_id,deleted_at,purge_after,content_removed,complete,revision) VALUES($1,$2,$3,$4,false,false,1) ON CONFLICT DO NOTHING', [scope.domainId, id, new Date(now).toISOString(), new Date(now + RETENTION_MS).toISOString()]);
+            await client.query('UPDATE mail.messages SET revision=revision+1 WHERE domain_id=$1 AND message_id=$2', [scope.domainId, id]);
+          }
         }
         return rows.map(row => row.message_id);
       });
-      for (const id of deleted) await purge(scope.domainId, id).catch(error => console.error('purge-failed', { name: error.name }));
+      for (const id of deleted) await purgeMessage({ pool, objects, domainId: scope.domainId, messageId: id }).catch(error => console.error('purge-failed', { name: error.name }));
       return { deleted: deleted.length };
     },
 

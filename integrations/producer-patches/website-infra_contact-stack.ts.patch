@@ -1,0 +1,28 @@
+--- a/infra/contact-stack.ts
++++ b/infra/contact-stack.ts
+@@ -143,6 +143,25 @@
+           : {}),
+       },
+     }));
++    // Opt-in Sent capture; the private From/destination routing remains in Secrets Manager.
++    const inboxCaptureBucket = this.node.tryGetContext('inboxCaptureBucket');
++    if (inboxCaptureBucket) {
++      if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(inboxCaptureBucket))
++        throw new Error('Invalid inbox capture bucket');
++      handler.addEnvironment('INBOX_CAPTURE_BUCKET', inboxCaptureBucket);
++      handler.addEnvironment(
++        'INBOX_CAPTURE_SOURCE',
++        production ? 'website-production' : 'website-staging',
++      );
++      handler.addToRolePolicy(
++        new PolicyStatement({
++          actions: ['s3:PutObject'],
++          resources: [
++            `arn:aws:s3:::${inboxCaptureBucket}/capture/${production ? 'website-production' : 'website-staging'}/*`,
++          ],
++        }),
++      );
++    }
+     config.grantRead(handler);
+     handler.addToRolePolicy(
+       new PolicyStatement({

@@ -16,11 +16,23 @@ for (const arn of [app.AppRoleArn, app.WorkerRoleArn]) if (!arn.startsWith(`arn:
 // Each role gets only what its code paths use (mail/repository, mailbox, drafts, send, ingest).
 const GRANTS = {
   // DELETE on content tables is for purging a message after its last alias deletes it.
-  inbox_mail: { role: app.AppRoleArn, tables: { domains: 'SELECT', aliases: 'SELECT', messages: 'SELECT, INSERT, DELETE', message_ids: 'SELECT, INSERT, DELETE', mailbox_entries: 'SELECT, INSERT, UPDATE, DELETE',
-    search_positions: 'SELECT, INSERT, DELETE', drafts: 'SELECT, INSERT, UPDATE, DELETE', deletion_tombstones: 'SELECT, INSERT', ingestion_receipts: 'SELECT', send_attempts: 'SELECT, INSERT, UPDATE, DELETE' } },
-  inbox_worker: { role: app.WorkerRoleArn, tables: { domains: 'SELECT', aliases: 'SELECT', messages: 'SELECT, INSERT', message_ids: 'SELECT, INSERT', mailbox_entries: 'SELECT, INSERT',
-    search_positions: 'SELECT, INSERT', deletion_tombstones: 'SELECT', ingestion_receipts: 'SELECT, INSERT, UPDATE', send_attempts: 'SELECT, UPDATE' } },
+  inbox_mail: { role: app.AppRoleArn, tables: { domains: 'SELECT', aliases: 'SELECT', messages: 'SELECT, INSERT, UPDATE, DELETE', message_ids: 'SELECT, INSERT, DELETE', mailbox_entries: 'SELECT, INSERT, UPDATE, DELETE',
+    search_positions: 'SELECT, INSERT, DELETE', drafts: 'SELECT, INSERT, UPDATE, DELETE', deletion_tombstones: 'SELECT, INSERT', ingestion_receipts: 'SELECT', purge_jobs: 'SELECT, INSERT, UPDATE', send_attempts: 'SELECT, INSERT, UPDATE, DELETE' } },
+  inbox_worker: { role: app.WorkerRoleArn, tables: { domains: 'SELECT', aliases: 'SELECT', messages: 'SELECT, INSERT, UPDATE', message_ids: 'SELECT, INSERT', mailbox_entries: 'SELECT, INSERT',
+    search_positions: 'SELECT, INSERT', purge_jobs: 'SELECT', deletion_tombstones: 'SELECT', ingestion_receipts: 'SELECT, INSERT, UPDATE', send_attempts: 'SELECT, UPDATE' } },
 };
+
+if (process.argv.includes('--recovery')) {
+  const recovery = outputs('recovery');
+  if (!recovery.MaintenanceRoleArn.startsWith(`arn:aws:iam::${config.accountId}:role/`)) throw new Error('Invalid maintenance role');
+  GRANTS.inbox_maintenance = { role: recovery.MaintenanceRoleArn, tables: Object.fromEntries(['domains', 'aliases', 'messages', 'message_ids', 'mailbox_entries', 'search_positions', 'drafts', 'deletion_tombstones', 'ingestion_receipts', 'send_attempts', 'purge_jobs'].map(table => [table, ({ messages: 'SELECT, DELETE', message_ids: 'SELECT, DELETE', search_positions: 'SELECT, DELETE', send_attempts: 'SELECT, DELETE', purge_jobs: 'SELECT, INSERT, UPDATE' })[table] || 'SELECT'])) };
+}
+
+if (process.argv.includes('--capture')) {
+  const capture = outputs('capture');
+  if (!capture.CaptureWorkerRoleArn.startsWith(`arn:aws:iam::${config.accountId}:role/`)) throw new Error('Invalid capture role');
+  GRANTS.inbox_capture = { role: capture.CaptureWorkerRoleArn, tables: { domains: 'SELECT', aliases: 'SELECT, INSERT', messages: 'SELECT, INSERT, UPDATE', message_ids: 'SELECT, INSERT', mailbox_entries: 'SELECT, INSERT', search_positions: 'SELECT, INSERT', deletion_tombstones: 'SELECT', ingestion_receipts: 'SELECT, INSERT, UPDATE', send_attempts: 'SELECT, INSERT, UPDATE', purge_jobs: 'SELECT' } };
+}
 
 const client = new AuroraDSQLClient({ host: storage.DatabaseHost, user: 'admin', profile: config.profile, region: config.region, connectionTimeoutMillis: 10000, ssl: { rejectUnauthorized: true } });
 await client.connect();

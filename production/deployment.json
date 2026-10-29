@@ -1,6 +1,6 @@
 {
   "environment": "production",
-  "verifiedOn": "2026-10-28",
+  "verifiedOn": "2026-10-29",
   "url": "https://inbox.example.com",
   "accountId": "111111111111",
   "region": "us-east-1",
@@ -10,13 +10,15 @@
     "project-inbox-prod-storage",
     "project-inbox-prod-app",
     "project-inbox-prod-receiving-example",
-    "project-inbox-prod-receiving-exampleorg"
+    "project-inbox-prod-receiving-exampleorg",
+    "project-inbox-prod-recovery",
+    "project-inbox-prod-capture"
   ],
   "distributionId": "E1EXAMPLE00004",
   "distributionDomain": "d2example00000.cloudfront.net",
   "authTable": "project-inbox-prod-app-Sessions-EXAMPLE",
-  "artifactKey": "releases/d3c247e4e5e1d7e61087dad84a31fe84c2bdbc1c43765bd7d84d107cea068db8/lambda.zip",
-  "lambdaSha256": "d3c247e4e5e1d7e61087dad84a31fe84c2bdbc1c43765bd7d84d107cea068db8",
+  "artifactKey": "releases/f664a0b33a7d732ce05208d39ac1994a454c281ee636a6e935dfc1ef5fba4c24/lambda.zip",
+  "lambdaSha256": "f664a0b33a7d732ce05208d39ac1994a454c281ee636a6e935dfc1ef5fba4c24",
   "mailBucket": "project-inbox-prod-storage-mail-EXAMPLE",
   "mailDatabaseId": "exampleclusterprod00000000",
   "configurationSet": "project-inbox-prod-storage",
@@ -50,7 +52,70 @@
     "realSendDelivered": true,
     "exampleorgReceived": true,
     "rawCopyFiled": true,
-    "alarmEmailSubscribed": "pending-confirmation",
-    "supportDualDelivery": true
+    "alarmEmailSubscribed": true,
+    "supportDualDelivery": true,
+    "earlyRawOriginalsPreserved": true,
+    "recoveryRuntimeRoleVerified": true,
+    "cloudRestoreVerified": true,
+    "deletionLedgerVerified": true,
+    "retentionCleanupVerified": true,
+    "scheduledMaintenanceVerified": true,
+    "recoveryAlarmsHealthy": true,
+    "temporaryRecoveryResourcesRemoved": true,
+    "websiteCaptureDelivered": true
+  },
+  "recovery": {
+    "deployedOn": "2026-10-28",
+    "verifiedOn": "2026-10-28T22:03:03.377335+00:00",
+    "stack": "project-inbox-prod-recovery",
+    "backupBucket": "project-inbox-prod-recovery-backups-EXAMPLE",
+    "maintenanceFunction": "project-inbox-prod-recovery-Maintenance-EXAMPLE",
+    "maintenanceRoleArn": "arn:aws:iam::111111111111:role/project-inbox-prod-recovery-MaintenanceRole-EXAMPLE",
+    "artifactKey": "releases/f664a0b33a7d732ce05208d39ac1994a454c281ee636a6e935dfc1ef5fba4c24/lambda.zip",
+    "lambdaSha256": "f664a0b33a7d732ce05208d39ac1994a454c281ee636a6e935dfc1ef5fba4c24",
+    "scheduleRule": "project-inbox-prod-recovery-Schedule-EXAMPLE",
+    "schedule": "rate(1 hour)",
+    "state": "ENABLED",
+    "firstBackup": "snapshots/1793206322541-1a705252-2a48-4ad2-90ad-92784f1a07fd/manifest.json",
+    "cloudRestoreVerified": true,
+    "rawPreservation": {
+      "inspected": 8,
+      "copiedAndVerified": 5,
+      "remainingIntakeReferences": 0
+    },
+    "runbook": "PRODUCTION_RECOVERY.md",
+    "verification": "production/recovery-verification.json",
+    "captureCleanupBucket": "project-inbox-prod-capture-EXAMPLE-us-east-1"
+  },
+  "capture": {
+    "deployedOn": "2026-10-29",
+    "stack": "project-inbox-prod-capture",
+    "intakeBucket": "project-inbox-prod-capture-EXAMPLE-us-east-1",
+    "queueArn": "arn:aws:sqs:us-east-1:111111111111:project-inbox-prod-capture-Queue-EXAMPLE",
+    "worker": "project-inbox-prod-capture-Worker-EXAMPLE",
+    "workerRoleArn": "arn:aws:iam::111111111111:role/project-inbox-prod-capture-Role-EXAMPLE",
+    "websiteFeedbackTopicArn": "arn:aws:sns:us-east-1:111111111111:project-inbox-prod-capture-WebsiteFeedback-EXAMPLE",
+    "artifactKey": "releases/f664a0b33a7d732ce05208d39ac1994a454c281ee636a6e935dfc1ef5fba4c24/lambda.zip",
+    "lambdaSha256": "f664a0b33a7d732ce05208d39ac1994a454c281ee636a6e935dfc1ef5fba4c24",
+    "sources": {
+      "website-production": {
+        "stack": "MassWebsiteContactProduction",
+        "enabledAt": "2026-10-29T03:39:21Z",
+        "ownerConfirmedDelivery": "2026-10-29"
+      },
+      "exampleorg-staging": {
+        "stack": "ExampleorgStagingDelivery",
+        "account": "222222222222",
+        "enabled": false,
+        "feedbackStack": "project-inbox-capture-exampleorg-staging",
+        "feedbackTopicArn": "arn:aws:sns:us-east-1:222222222222:project-inbox-capture-exampleorg-staging-Topic-EXAMPLE",
+        "note": "Producer write grant exists; capture env not deployed and feedback topic not yet passed to the capture stack"
+      }
+    },
+    "syntheticVerification": {
+      "messageId": "10910320-0cb8-4ea3-be4c-7f35a426b7e3",
+      "subject": "[Disposable Inbox verification — no email sent]",
+      "folder": "info@example.com Sent"
+    }
   }
 }

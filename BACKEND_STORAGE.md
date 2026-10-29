@@ -1,6 +1,6 @@
 # Mail storage foundation
 
-Prepared October 27, 2026. **Storage design and isolated feasibility work.** The hosted stage now uses a separate DSQL/S3 workspace-snapshot bridge for shared sample mail (see [STAGING.md](STAGING.md)); the production relational schema below is not yet connected. After separate approval, a disposable staging DSQL cluster was created for a synthetic benchmark. It has no connection to the app or email routing. Results and cleanup are recorded in the benchmark report.
+Prepared October 27, 2026; status corrected October 28. **Historical storage design and isolated feasibility work.** Production now uses the evolved schema in `mail/schema.sql` and repository in `mail/`, with server search. The hosted stage uses a separate DSQL/S3 workspace-snapshot bridge for shared sample mail (see [STAGING.md](STAGING.md)). See [PROJECT_STATUS.md](PROJECT_STATUS.md) for remaining production recovery and retention work. After separate approval, a disposable staging DSQL cluster was created for a synthetic benchmark. It has no connection to the app or email routing. Results and cleanup are recorded in the benchmark report.
 
 ## Ownership and stored data
 

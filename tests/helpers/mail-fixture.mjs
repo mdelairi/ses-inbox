@@ -22,6 +22,7 @@ export async function mailFixture(db) {
     async getBytes(key) { if (!stored.has(key)) throw Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' }); return stored.get(key); },
     async put(key, body) { stored.set(key, Buffer.from(body)); },
     async remove(key) { stored.delete(key); },
+    async listCurrent(prefix) { return [...stored.keys()].filter(key => key.startsWith(prefix)); },
     async uploadUrl(key, sha256) { return { url: `https://objects.invalid/${key}`, headers: { 'x-amz-checksum-sha256': sha256 } }; },
     async downloadUrl(key) { return `https://objects.invalid/${key}`; },
   };

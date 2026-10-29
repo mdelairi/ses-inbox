@@ -1,0 +1,42 @@
+--- a/library/server/invitation-mail.mjs
++++ b/library/server/invitation-mail.mjs
+@@ -1,3 +1,4 @@
++import { sendProjectEmail } from './inbox-capture.mjs';
+ import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
+ const header = (value) =>
+   String(value)
+@@ -53,7 +54,8 @@
+     });
+     let sent;
+     try {
+-      sent = await client.send(
++      sent = await sendProjectEmail(
++        { configuration, client, kind: 'member_invitation' },
+         new SendEmailCommand({
+           FromEmailAddress: '"ExampleOrg, Admin" <no-reply@example.org>',
+           ReplyToAddresses: [settings.replyTo],
+@@ -77,14 +79,16 @@
+       );
+     } catch (error) {
+       // Timeouts/5xx can follow acceptance; never automatically replay a generation.
+-      const rejected = [
+-        'MessageRejected',
+-        'BadRequestException',
+-        'MailFromDomainNotVerifiedException',
+-        'AccountSuspendedException',
+-        'SendingPausedException',
+-        'AccessDeniedException',
+-      ].includes(error.name);
++      const rejected =
++        error.notSent === true ||
++        [
++          'MessageRejected',
++          'BadRequestException',
++          'MailFromDomainNotVerifiedException',
++          'AccountSuspendedException',
++          'SendingPausedException',
++          'AccessDeniedException',
++        ].includes(error.name);
+       console.warn('Invitation email not sent:', JSON.stringify({ provider: error.name, rejected }));
+       return finish(rejected ? 'failed' : 'uncertain', {
+         reason: rejected ? 'provider_rejected' : 'provider_outcome_unknown',

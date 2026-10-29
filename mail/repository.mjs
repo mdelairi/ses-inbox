@@ -69,12 +69,15 @@ export function createRepository(pool) {
     },
 
     // Atomically makes a fully stored message visible to each receiving alias.
-    async publish({ receipt, message, rfcHash, aliasIds, folder }) {
+    async publish({ receipt, message, rfcHash, aliasIds, folder, read = false, sendAttempt }) {
       return transaction(pool, async client => {
         const owned = await client.query('UPDATE mail.ingestion_receipts SET state=$4, lease_token=NULL, revision=revision+1 WHERE domain_id=$1 AND receipt_key=$2 AND lease_token=$3 AND state=$5',
           [message.domainId, receipt.key, receipt.token, 'published', 'processing']);
         if (!owned.rowCount) throw new Error('IngestionLeaseLost');
         const m = message;
+        if ((await client.query('SELECT 1 FROM mail.purge_jobs WHERE domain_id=$1 AND message_id=$2', [m.domainId, m.messageId])).rowCount) return { delivered: [] };
+        // Serialize existing-message publication against last-reference retirement.
+        await client.query('UPDATE mail.messages SET revision=revision+1 WHERE domain_id=$1 AND message_id=$2', [m.domainId, m.messageId]);
         await client.query(`INSERT INTO mail.messages(domain_id,message_id,thread_id,received_at,sent_at,subject,sender_name,sender_address,recipients_json,snippet,has_attachments,source,environment,verdicts_json,quarantined,object_manifest_key,search_generation,search_partial,tokenizer_version,revision)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,1) ON CONFLICT DO NOTHING`,
         [m.domainId, m.messageId, m.threadId, m.receivedAt, m.sentAt, m.subject, m.senderName, m.senderAddress, JSON.stringify(m.recipients), m.snippet, m.hasAttachments, m.source, m.environment, JSON.stringify(m.verdicts), m.quarantined, m.manifestKey, m.generation, m.searchPartial, m.tokenizerVersion]);
@@ -82,9 +85,10 @@ export function createRepository(pool) {
         const { rows } = await client.query(`SELECT alias_id FROM mail.deletion_tombstones WHERE domain_id=$1 AND message_id=$2 AND alias_id IN (${placeholders(aliasIds, 2)})`, [m.domainId, m.messageId, ...aliasIds]);
         const blocked = new Set(rows.map(row => row.alias_id)), delivered = aliasIds.filter(id => !blocked.has(id));
         for (const aliasId of delivered) {
-          await client.query('INSERT INTO mail.mailbox_entries(domain_id,alias_id,message_id,thread_id,folder,is_read,received_at,revision) VALUES($1,$2,$3,$4,$5,false,$6,1) ON CONFLICT DO NOTHING',
-            [m.domainId, aliasId, m.messageId, m.threadId, folder, m.receivedAt]);
+          await client.query('INSERT INTO mail.mailbox_entries(domain_id,alias_id,message_id,thread_id,folder,is_read,received_at,revision) VALUES($1,$2,$3,$4,$5,$7,$6,1) ON CONFLICT DO NOTHING',
+            [m.domainId, aliasId, m.messageId, m.threadId, folder, m.receivedAt, Boolean(read)]);
         }
+        if (sendAttempt && delivered.includes(sendAttempt.aliasId)) await client.query('INSERT INTO mail.send_attempts(domain_id,attempt_id,alias_id,message_id,state,detail,updated_at,revision) VALUES($1,$2,$3,$4,$5,$6,$7,1) ON CONFLICT DO NOTHING', [m.domainId, sendAttempt.id, sendAttempt.aliasId, m.messageId, 'uncertain', 'The producer has not confirmed an outcome yet.', m.receivedAt]);
         return { delivered };
       });
     },

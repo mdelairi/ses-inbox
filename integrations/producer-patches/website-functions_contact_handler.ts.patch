@@ -1,0 +1,17 @@
+--- a/functions/contact/handler.ts
++++ b/functions/contact/handler.ts
+@@ -1,3 +1,4 @@
++import { sendContactEmail } from './inbox-capture';
+ import {
+   SecretsManagerClient,
+   GetSecretValueCommand,
+@@ -107,7 +108,8 @@
+     },
+     async deliver(config, message) {
+       try {
+-        await ses.send(
++        await sendContactEmail(
++          ses,
+           new SendEmailCommand({
+             FromEmailAddress: config.fromEmail,
+             FromEmailAddressIdentityArn: process.env.SES_IDENTITY_ARN,

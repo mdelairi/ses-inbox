@@ -1,6 +1,8 @@
-# Project Inbox — local prototype
+# Project Inbox
 
-A browser-based prototype for private project mail on example.com and example.org. It uses fictional sample messages and browser-local storage. **Send locally never sends an email.**
+Private project mail for example.com and example.org is live at [inbox.example.com](https://inbox.example.com). See [PRODUCTION.md](PRODUCTION.md) for the production runbook and [PROJECT_STATUS.md](PROJECT_STATUS.md) for the current outstanding work.
+
+The localhost preview described below uses fictional sample messages and browser-local storage. **Send locally never sends an email.**
 
 Source: [mdelairi/ses-inbox](https://github.com/mdelairi/ses-inbox) (private repository).
 
@@ -38,7 +40,7 @@ npm test
 npm run build
 ```
 
-The twelve model tests cover search/domain isolation, word/phrase matching, filters, alias-aware replies, address changes, Trash retention/deletion, simulated send deduplication, send validation, alias isolation, and independent deletion of copies delivered to multiple addresses.
+The main suite now has 113 passing checks, including automated Sent capture, producer contract checks and an isolated backup/restore drill against embedded PostgreSQL (PGlite). Producer contract checks read the local ExampleOrg/website checkouts and use mocked AWS clients; they do not edit those projects or send email. Set `INBOX_TEST_NATIVE_POSTGRES=1` to use the optional native test server instead; these checks do not reproduce DSQL-specific IAM or concurrency. The twelve model tests cover search/domain isolation, word/phrase matching, filters, alias-aware replies, address changes, Trash retention/deletion, simulated send deduplication, send validation, alias isolation, and independent deletion of copies delivered to multiple addresses.
 
 Browser checks use the declared Playwright development dependency and Chrome:
 
@@ -49,9 +51,9 @@ npm run test:browser
 
 Eight browser journeys cover domain/search/filter behaviour, draft persistence, rich compose/files/images/local sends, archive/delete/undo, alias management, untrusted HTML isolation, phone-sized navigation, fixed mailbox senders, and workspace colour changes. They passed in isolated Chrome contexts. These tests do not touch the user's preview data. The renderer strips active email HTML and isolates rich messages in sandboxed frames; this is prototype validation, not a completed production email-security review.
 
-## Still to connect
+## Hosted environments and remaining work
 
-The next backend foundation is documented in [BACKEND_STORAGE.md](BACKEND_STORAGE.md), with a candidate SQL schema, a reproducible local search/storage probe, and a separately approved temporary DSQL experiment. See [measured results](planning/STORAGE_BENCHMARK.md). Run `python3 -m unittest discover -s backend -p 'test_*.py'` and `python3 planning/benchmark_storage.py --sizes 1000 10000 50000` for local-only checks. The hosted stage now uses a separate DSQL/S3 bridge for shared sample data; localhost remains browser-local.
+The historical storage feasibility work is documented in [BACKEND_STORAGE.md](BACKEND_STORAGE.md), with the original candidate schema, a reproducible local search/storage probe, and the temporary DSQL experiment. Production now uses the evolved repository and schema in `mail/`. See [measured results](planning/STORAGE_BENCHMARK.md). Run `python3 -m unittest discover -s backend -p 'test_*.py'` and `python3 planning/benchmark_storage.py --sizes 1000 10000 50000` for local-only checks. The hosted stage now uses a separate DSQL/S3 bridge for shared sample data; localhost remains browser-local.
 
 The private sample-only staging release is live at [stage.example.com](https://stage.example.com), with Google sign-in restricted to the owner. See [STAGING.md](STAGING.md) for resources, release commands, validation, and the runbook. `npm run stage:prepare` is local-only; `npm run stage:check` reports readiness without provisioning anything.
 
@@ -61,6 +63,6 @@ Source now also includes sample-stage retention: a permanent-deletion ledger tha
 
 Real mail is live in production at [inbox.example.com](https://inbox.example.com) for all four aliases (support@example.org in dual delivery with ExampleOrg for now). See [PRODUCTION.md](PRODUCTION.md) for the mail flow, runbook, and known gaps.
 
-Retiring ExampleOrg's duplicate support@ copy (its StoreSupport rule), automated project capture, background iPhone push, and verified backups remain pending. Production uses the relational mail repository and server search; the shared sample stage still searches in the browser; the separate benchmark validates candidate DSQL query behavior, not complete production costs.
+Automated Sent capture is live in production for the website contact form; ExampleOrg staging capture is implemented but not yet enabled. See [AUTOMATED_SENT.md](AUTOMATED_SENT.md). Retiring ExampleOrg's duplicate support@ copy (its StoreSupport rule), background iPhone push, in-app production alias changes and complete refresh/pagination remain pending. Production backups and hourly retention maintenance are deployed and cloud-verified; early raw originals are preserved, isolated restore/deletion drills passed and temporary resources were removed. See [PRODUCTION_RECOVERY.md](PRODUCTION_RECOVERY.md). Production uses the relational mail repository and server search; the shared sample stage still searches in the browser; the separate benchmark validates candidate DSQL query behavior, not complete production costs.
 
-The local preview runs without AWS. Hosted staging changes are isolated to this app; production email routing and other project sources remain unchanged. See [PROJECT_PLAN.md](PROJECT_PLAN.md), [AWS_AUDIT.md](AWS_AUDIT.md), and [ARCHITECTURE_PROPOSAL.md](ARCHITECTURE_PROPOSAL.md) for the confirmed requirements, existing infrastructure, and proposed production design.
+The local preview runs without AWS. Hosted staging changes are isolated to this app; production email routing is unchanged; producer source changes are local and opt-in. See [PROJECT_PLAN.md](PROJECT_PLAN.md), [AWS_AUDIT.md](AWS_AUDIT.md), and [ARCHITECTURE_PROPOSAL.md](ARCHITECTURE_PROPOSAL.md) for the confirmed requirements, existing infrastructure, and proposed production design.
