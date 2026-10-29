@@ -115,7 +115,8 @@
     "syntheticVerification": {
       "messageId": "10910320-0cb8-4ea3-be4c-7f35a426b7e3",
       "subject": "[Disposable Inbox verification — no email sent]",
-      "folder": "info@example.com Sent"
+      "folder": "info@example.com Sent",
+      "permanentlyDeletedOn": "2026-10-29"
     }
   }
 }
