@@ -83,9 +83,10 @@ The web client is plain ES modules with no framework; the same `web/` code runs 
 ## Validation
 
 ```sh
-npm test          # 103 checks: model, MIME, send/receive, retention, capture, backup/restore drill on embedded PostgreSQL (PGlite)
-npm run build     # copies the frontend to dist/
-npm install && npm run test:browser   # 8 Playwright journeys in isolated Chrome contexts
+npm install
+npm test               # 103 checks: model, MIME, send/receive, retention, capture, backup/restore drill on embedded PostgreSQL (PGlite)
+npm run build          # copies the frontend to dist/
+npm run test:browser   # 21 Playwright journeys in isolated contexts; needs Google Chrome installed
 ```
 
 The backup/restore drill in the main suite runs against an embedded PostgreSQL. It does not reproduce DSQL-specific IAM or concurrency; those were verified in the cloud and are recorded in [docs/PRODUCTION_RECOVERY.md](docs/PRODUCTION_RECOVERY.md). The producer contract checks are skipped unless the producers' source checkouts are present beside this repository.

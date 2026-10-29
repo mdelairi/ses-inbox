@@ -39,6 +39,8 @@ async function list(directory, prefix = '') {
 const assets = {};
 for (const file of await list(new URL('assets/', output))) assets[file] = sha(await readFile(new URL(`assets/${file}`, output)));
 await writeFile(new URL('assets-manifest.json', output), JSON.stringify(assets, null, 2) + '\n');
+// The browser tests need only the staged assets, not a deployment config.
+if (process.argv.includes('--assets-only')) { console.log('Staging assets prepared: build/stage/assets/'); process.exit(0); }
 const sources = {};
 for (const file of await list(new URL('source/', output))) sources[file] = sha(await readFile(new URL(`source/${file}`, output)));
 const releaseId = sha(JSON.stringify({ assets, sources, templates }));

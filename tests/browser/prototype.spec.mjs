@@ -17,7 +17,7 @@ test('domain-scoped search and staging filters', async ({ page }) => {
   await page.locator('#filter-source').selectOption('automated'); await page.locator('#filter-environment').selectOption('staging');
   await expect(page.locator('.thread-row')).toHaveCount(1);
   await expect(page.locator('.thread-row')).toContainText('[STAGING]');
-  await expect(page.locator('.thread-row')).not.toContainText('Example');
+  await expect(page.locator('.thread-row')).not.toContainText('A little reminder');
 });
 
 test('alias-aware reply and drafts survive domain changes and reload', async ({ page }) => {
@@ -158,7 +158,7 @@ test('the top-bar inbox picker switches across domains in two taps', async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Switch inbox: info@example.com' }).click();
   await expect(page.getByRole('menuitem')).toHaveCount(5);
-  await page.getByRole('menuitem', { name: /^support@exampleorg\.com/ }).click();
+  await page.getByRole('menuitem', { name: /^support@example\.org/ }).click();
   await expect(page.locator('.breadcrumb-address')).toHaveText('support@example.org');
   await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
   await expect(page.locator('.list-footer')).toHaveText('Sample mail · support@example.org');
@@ -175,7 +175,7 @@ test('Restore returns sent mail to Sent and received mail to Inbox; the phone si
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('#mail-search')).toHaveAttribute('placeholder', 'Search');
   await page.getByRole('button', { name: /^Switch inbox:/ }).click();
-  await page.getByRole('menuitem', { name: /^no-reply@exampleorg\.com/ }).click();
+  await page.getByRole('menuitem', { name: /^no-reply@example\.org/ }).click();
   await expect(page.getByRole('heading', { name: 'Sent', exact: true })).toBeVisible();
   const row = page.locator('.thread-item').first(), subject = (await row.locator('.row-subject').textContent()).trim();
   await row.locator('.row-check input').check();
