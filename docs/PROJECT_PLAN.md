@@ -13,7 +13,7 @@ The requirements below remain the acceptance baseline. Architecture sections des
 - Initially support example.com and example.org, with a design that accommodates additional project domains.
 - Separate mailboxes for every email alias, grouped under domains. Switch domains with the workspace selector and addresses with tabs above the inbox. No combined inbox.
 - Receive only explicitly enabled addresses. Manage aliases in the app: add, rename/edit, and disable.
-- Launch addresses: info@example.com, taylor@example.com, info@example.org, and support@example.org. Initial sender display names and default aliases are seeded in production/config.json; they can be reviewed during setup.
+- Launch addresses: info@example.com, taylor@example.com, info@example.org, and support@example.org. Initial sender display names and default aliases are seeded in production/config.example.json; they can be reviewed during setup.
 - Use existing SES infrastructure where appropriate. Inspect identities, receipt rules, and sending configuration later to establish actual addresses and capabilities.
 - No historical email migration required; a few test messages may exist.
 - Include inbox, sent, archive, trash, spam, unread status, drafts, search, conversation threads, attachments, compose, reply, and forward.

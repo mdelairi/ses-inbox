@@ -1,7 +1,12 @@
 {
-  "name": "exampleorg-inbox",
+  "name": "ses-inbox",
   "version": "0.1.0",
-  "private": true,
+  "description": "A private, multi-domain web mailbox built on Amazon SES, Aurora DSQL and S3, with retention, backups and automated Sent capture.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mdelairi/ses-inbox.git"
+  },
   "type": "module",
   "engines": {
     "node": ">=22"

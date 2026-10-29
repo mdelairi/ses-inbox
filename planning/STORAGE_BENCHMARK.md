@@ -4,7 +4,7 @@ October 27, 2026. Synthetic data only. Hosted stage and live email routing were 
 
 **Decision:** DSQL remains a viable candidate for the next server-backed sample-mail milestone. The schema and search primitives work on the service. This experiment does not establish a production monthly bill, representative long-message storage, or completed ingestion/deletion/recovery behavior.
 
-**Temporary resource status:** `deleted-and-verified`. See [resource/cleanup record](dsql_benchmark_resources.json).
+**Temporary resource status:** `deleted-and-verified`. See [resource/cleanup record](dsql_benchmark_resources.example.json).
 
 ## Measured query behavior
 

@@ -1,68 +1,115 @@
-# Project Inbox
+# SES Inbox
 
-Private project mail for example.com and example.org is live at [inbox.example.com](https://inbox.example.com). See [PRODUCTION.md](PRODUCTION.md) for the production runbook and [PROJECT_STATUS.md](PROJECT_STATUS.md) for the current outstanding work.
+A private, multi-domain web mailbox built directly on Amazon SES, Aurora DSQL and S3 — with server-side search, a deletion ledger, verified backups and automated capture of mail that other systems send.
 
-The localhost preview described below uses fictional sample messages and browser-local storage. **Send locally never sends an email.**
+I built it to replace a hosted mailbox for two small domains of my own (a personal site and a product). It has been running my real mail in production since October 2026. This repository is published as a **reference implementation**: the code, infrastructure templates, tests and runbooks are all here so you can read how it is built. It is not packaged as a turnkey product, and the hosted deployment itself stays private.
 
-Source: [mdelairi/ses-inbox](https://github.com/mdelairi/ses-inbox) (private repository).
+Every domain, address, account ID and resource name in this repository is a placeholder (`example.com`, `example.org`, `111111111111`, …). The sample messages are fictional.
 
-## Run
+![Desktop inbox](docs/screenshots/desktop-inbox.png)
 
-Use Node.js 22 or later:
+## Try it in one command
+
+The local preview needs only Node.js 22. No dependency installation, AWS credentials or cloud resources — it uses fictional sample messages and browser-local storage, and **"Send locally" never sends an email**.
 
 ```sh
 npm run dev
 ```
 
-Open **http://127.0.0.1:4317** on this computer. No dependency installation, AWS credentials, or cloud resources are needed to run the local preview. The server binds only to the loopback interface; this URL is not reachable from a separate phone. Narrow the browser window to review the phone layout.
+Open <http://127.0.0.1:4317>. Narrow the window to see the phone layout. `C` composes, `/` searches, `⌘/Ctrl+Enter` sends locally.
 
-`INBOX_PORT=4318 npm run dev` selects another port. Stop the process with Ctrl+C. `npm run build` copies the frontend to `dist`; it does not provision or publish a working mail service. The original backend build is retained as `npm run build:server` and requires the declared dependencies; those server modules are a partial earlier scaffold, not the proposed production architecture.
+Things to try: switch between the two workspaces and their addresses; reply, forward and compose with formatting, inline images and attachments; close a draft, reload, and reopen it from Drafts; search with words or quoted phrases; archive, trash, undo and permanently delete; add or disable an address in *Aliases & settings*.
 
-## Try the flows
+<p>
+  <img src="docs/screenshots/desktop-conversation.png" alt="Reading a conversation" width="49%">
+  <img src="docs/screenshots/desktop-compose.png" alt="Composing a message" width="49%">
+</p>
 
-- Switch between Example (green) and ExampleOrg (blue), then choose an address from the tabs above the message list. Each address has separate folders, unread state, drafts, search, and thread history.
-- Open a conversation, reply, forward, or compose. The sender is fixed to the selected mailbox; close the draft and switch address tabs to use another sender. Use formatting, links, signatures, attachments, and inline PNG/JPEG/GIF/WebP images.
-- Close a draft to save it. Switch domains or reload, then reopen it from its address’s Drafts folder. Local drafts and files stay in this browser; cross-device synchronization is not implemented.
-- Use word or quoted-phrase search over sender, recipients, subject, and body. Search covers only the selected address across folders. Filters select source, environment, and unread state.
-- In each address’s Sent folder, distinguish manual/automated mail and staging/production. Captured senders such as no-reply@example.org have a read-only mailbox; capturing outgoing mail does not enable sending or receiving at that address. Local sends are explicitly labelled as previews.
-- If one message reaches two aliases, each copy has independent folder/read state. Archive, move to Trash/Spam, undo a folder move, restore to Inbox, or explicitly delete Trash mail permanently. Trash has no automatic expiry. A deletion removes data from this local preview; it does not create a cloud recovery copy.
-- In **Aliases & settings**, add/edit/disable addresses and choose a default sender. Address changes create a replacement alias and can optionally disable the old one; existing message addresses remain unchanged.
-- Preview sender/subject notifications. **Local preview → Add sample** creates a fictional incoming message and displays a notification preview if enabled.
+## What it does
 
-Keyboard shortcuts: **C** to compose, **/** to search, **⌘/Ctrl+Enter** to send locally. Changes use IndexedDB; storage failures are displayed instead of being reported as saved. **Settings → Local preview → Reset local sample data** restores fixtures after an explicit confirmation and removes local preview edits.
+- **Several domains, several addresses, one owner.** Each address has its own folders, unread state, drafts, search and thread history. A message delivered to two addresses is two independent copies.
+- **Receiving** through SES receipt rules into S3, then SNS → SQS → a worker Lambda that parses MIME, files the raw original and every part, indexes search positions and threads by `Message-ID`/`References`.
+- **Sending** through SES v2 with the sent copy stored and indexed *before* the API call. Each attempt is recorded once; definite SES errors mark it failed, anything ambiguous is left `uncertain` and never retried blindly. Delivery, bounce and complaint events flow back through the same queue onto the message.
+- **Search without a search service.** Positional term indexes in DSQL support word and quoted-phrase search per address, with a benchmark that chose the query strategy per case ([planning/STORAGE_BENCHMARK.md](planning/STORAGE_BENCHMARK.md)).
+- **Delete forever means forever.** Permanent deletion writes an independent S3 deletion intent and a SQL tombstone first; a non-content ledger persists so replay and restore cannot resurrect a deleted message. Retired content is swept at 29 days; retained mail never expires by age.
+- **Backups you can restore.** An hourly maintenance Lambda produces checksummed, manifest-committed backups into a separate encrypted bucket. Restore only ever targets an empty isolated destination and applies the latest deletion ledger; overwriting live data is refused. Restore and deletion drills were run against the cloud, not just locally.
+- **Automated Sent capture.** Mail that other systems send on the domains' behalf (a website contact form, a product's invitation emails) is captured into the owner's Sent folder through a source-scoped, write-only intake — producers get an exact S3 prefix and nothing else.
+- **Owner-only access.** CloudFront (OAC, SigV4) → Lambda function URL (IAM auth) → a Google sign-in gateway restricted to one account. The direct function URL returns 403.
+- **A PWA with Web Push.** New Inbox mail sends a sender/subject notification to every enrolled device and can forward a copy to outside addresses, at most once per target.
+- **Email HTML is treated as hostile.** Active content is stripped and rich messages render inside sandboxed frames.
 
-The text palette uses dark and medium greys, following the owner's review; workspace-specific green/blue is used for surfaces and control accents. Spelling in compose is delegated to the browser/OS, with spell-check and English language hints enabled on the body and subject. Chrome's **Edit → Spelling and Grammar → Check Spelling While Typing** must also be enabled for native checking; this prototype does not call a spelling service or include a separate dictionary.
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Receive
+    MX[SES receipt rules] --> S3in[(S3 incoming/)]
+    S3in --> SNS --> SQS --> W[Worker Lambda]
+  end
+  W --> DB[(Aurora DSQL<br/>metadata · search index · ledger)]
+  W --> S3[(S3 mail/<br/>raw MIME · bodies · parts · uploads)]
+  subgraph Serve
+    CF[CloudFront + OAC] --> App[App Lambda<br/>Google sign-in · API]
+  end
+  App --> DB
+  App --> S3
+  App -->|SendEmail| SES[SES v2]
+  SES -->|delivery · bounce · complaint| SNS
+  subgraph Maintain
+    Sched[Hourly schedule] --> M[Maintenance Lambda]
+    M --> DB
+    M --> S3
+    M --> BK[(Backup bucket)]
+  end
+  Producers[Website · product mailers] -->|write-only prefix| Cap[(Capture bucket)] --> SQS
+  Browser[PWA] --> CF
+  W -->|Web Push| Browser
+```
+
+The web client is plain ES modules with no framework; the same `web/` code runs against browser-local IndexedDB in the preview and against the API in production. Infrastructure is plain CloudFormation generated from JavaScript (`infra/`), deployed by change sets that a person reviews.
+
+| Directory | What is there |
+| --- | --- |
+| `web/` | The client: model, rendering, local storage, HTML safety, service worker |
+| `mail/` | Production mail: schema, repository, ingest, send, drafts, search text, retention, backup, push |
+| `capture/` | Automated Sent intake worker and producer protocol |
+| `infra/` | CloudFormation templates for production, staging and capture |
+| `stage/` | The sample-data staging deployment and its Google sign-in gateway |
+| `scripts/` | Packaging, initialization, release checks, recovery and drill tooling |
+| `tests/` | Node test suite plus Playwright browser journeys |
+| `planning/` | Storage benchmark, DSQL diagnosis and cost model |
+| `docs/` | Runbooks and the project record (see below) |
 
 ## Validation
 
 ```sh
-npm test
-npm run build
+npm test          # 103 checks: model, MIME, send/receive, retention, capture, backup/restore drill on embedded PostgreSQL (PGlite)
+npm run build     # copies the frontend to dist/
+npm install && npm run test:browser   # 8 Playwright journeys in isolated Chrome contexts
 ```
 
-The main suite now has 113 passing checks, including automated Sent capture, producer contract checks and an isolated backup/restore drill against embedded PostgreSQL (PGlite). Producer contract checks read the local ExampleOrg/website checkouts and use mocked AWS clients; they do not edit those projects or send email. Set `INBOX_TEST_NATIVE_POSTGRES=1` to use the optional native test server instead; these checks do not reproduce DSQL-specific IAM or concurrency. The twelve model tests cover search/domain isolation, word/phrase matching, filters, alias-aware replies, address changes, Trash retention/deletion, simulated send deduplication, send validation, alias isolation, and independent deletion of copies delivered to multiple addresses.
+The backup/restore drill in the main suite runs against an embedded PostgreSQL. It does not reproduce DSQL-specific IAM or concurrency; those were verified in the cloud and are recorded in [docs/PRODUCTION_RECOVERY.md](docs/PRODUCTION_RECOVERY.md). The producer contract checks are skipped unless the producers' source checkouts are present beside this repository.
 
-Browser checks use the declared Playwright development dependency and Chrome:
+## Deploying your own
 
-```sh
-npm install
-npm run test:browser
-```
+This is not a one-click deploy, but everything needed is here. The short version:
 
-Eight browser journeys cover domain/search/filter behaviour, draft persistence, rich compose/files/images/local sends, archive/delete/undo, alias management, untrusted HTML isolation, phone-sized navigation, fixed mailbox senders, and workspace colour changes. They passed in isolated Chrome contexts. These tests do not touch the user's preview data. The renderer strips active email HTML and isolates rich messages in sandboxed frames; this is prototype validation, not a completed production email-security review.
+1. Copy `accounts.example.json` to `accounts.json` and fill in your AWS account IDs, CLI profiles and owner address. Copy `stage/config.example.json` and `production/config.example.json` likewise. All of these are gitignored.
+2. Follow [docs/STAGING.md](docs/STAGING.md) for the sample-data stage (Google sign-in, DSQL, S3, CloudFront) and [docs/PRODUCTION.md](docs/PRODUCTION.md) for real mail: receipt rules, MX, sending identities, the app stack, then the recovery stack.
+3. `npm run stage:check` and the `scripts/check-*.mjs` scripts report readiness without creating anything.
 
-## Hosted environments and remaining work
+The runbooks were written for my deployment and then had its identifiers replaced with placeholders, so expect to adapt resource names and account layout rather than paste commands.
 
-The historical storage feasibility work is documented in [BACKEND_STORAGE.md](BACKEND_STORAGE.md), with the original candidate schema, a reproducible local search/storage probe, and the temporary DSQL experiment. Production now uses the evolved repository and schema in `mail/`. See [measured results](planning/STORAGE_BENCHMARK.md). Run `python3 -m unittest discover -s backend -p 'test_*.py'` and `python3 planning/benchmark_storage.py --sizes 1000 10000 50000` for local-only checks. The hosted stage now uses a separate DSQL/S3 bridge for shared sample data; localhost remains browser-local.
+## Project record
 
-The private sample-only staging release is live at [stage.example.com](https://stage.example.com), with Google sign-in restricted to the owner. See [STAGING.md](STAGING.md) for resources, release commands, validation, and the runbook. `npm run stage:prepare` is local-only; `npm run stage:check` reports readiness without provisioning anything.
+The `docs/` folder is the project as it actually happened, kept because the decisions matter as much as the code:
 
-The hosted sample stage persists drafts, aliases, mailbox state, attached files, and inline images across devices. Create a draft, wait for “Saved to shared workspace,” then open the same mailbox’s Drafts on another signed-in device. Use Refresh/reload to retrieve changes. Earlier browser-only samples are preserved separately and are not automatically imported.
+- [ARCHITECTURE_PROPOSAL.md](docs/ARCHITECTURE_PROPOSAL.md) — the low-cost design, boundaries and monthly cost model
+- [BACKEND_STORAGE.md](docs/BACKEND_STORAGE.md) and [planning/STORAGE_BENCHMARK.md](planning/STORAGE_BENCHMARK.md) — why DSQL, with measurements
+- [STAGING.md](docs/STAGING.md), [PRODUCTION.md](docs/PRODUCTION.md), [PRODUCTION_RECOVERY.md](docs/PRODUCTION_RECOVERY.md) — runbooks, validation evidence and accepted risks
+- [AUTOMATED_SENT.md](docs/AUTOMATED_SENT.md) — the capture design and the producer-side review
+- [AWS_AUDIT.md](docs/AWS_AUDIT.md), [PROJECT_PLAN.md](docs/PROJECT_PLAN.md), [PROJECT_STATUS.md](docs/PROJECT_STATUS.md) — what existed before, the plan, and what is still open
 
-Source now also includes sample-stage retention: a permanent-deletion ledger that prevents resurrection, 29-day retirement of replaced states and attachments, an hourly cleanup Lambda with failure alarms, and an additive recovery function. It was deployed to staging on October 28, 2026; see [STAGING.md](STAGING.md#retention-and-recovery-deployed-october-28-2026).
+## Author
 
-Real mail is live in production at [inbox.example.com](https://inbox.example.com) for all four aliases (support@example.org in dual delivery with ExampleOrg for now). See [PRODUCTION.md](PRODUCTION.md) for the mail flow, runbook, and known gaps.
-
-Automated Sent capture is live for the website contact form and ExampleOrg staging. See [AUTOMATED_SENT.md](AUTOMATED_SENT.md). Retiring ExampleOrg's duplicate support@ copy (its StoreSupport rule), background iPhone push, in-app production alias changes and complete refresh/pagination remain pending. Production backups and hourly retention maintenance are deployed and cloud-verified; early raw originals are preserved, isolated restore/deletion drills passed and temporary resources were removed. See [PRODUCTION_RECOVERY.md](PRODUCTION_RECOVERY.md). Production uses the relational mail repository and server search; the shared sample stage still searches in the browser; the separate benchmark validates candidate DSQL query behavior, not complete production costs.
-
-The local preview runs without AWS. Hosted staging changes are isolated to this app; production email routing is unchanged; producer source changes are local and opt-in. See [PROJECT_PLAN.md](PROJECT_PLAN.md), [AWS_AUDIT.md](AWS_AUDIT.md), and [ARCHITECTURE_PROPOSAL.md](ARCHITECTURE_PROPOSAL.md) for the confirmed requirements, existing infrastructure, and proposed production design.
+Built by [Mass Delairi](https://delairi.com). MIT licensed — see [LICENSE](LICENSE).

@@ -1,6 +1,7 @@
 // Explicit operator recovery for the shared sample workspace. Uses the scoped
 // inbox_maintenance database role, never admin. Dry run unless --apply is given.
-import { readFile } from 'node:fs/promises';
+import { readDeploymentFile } from './lib/deployment-file.mjs';
+
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { parseArgs } from 'node:util';
@@ -17,7 +18,7 @@ if (!args['object-key'] !== !args['version-id']) throw new Error(`Give both --ob
 if ((args.apply || args['repair-unreadable']) && !args['object-key']) throw new Error(`--apply needs a source version.\n${usage}`);
 if (args.apply && !/^\d+$/.test(args['expected-revision'] || '')) throw new Error('--apply needs --expected-revision from a dry run, so a newer save cannot be overtaken.');
 
-const config = JSON.parse(await readFile(new URL('../stage/config.json', import.meta.url)));
+const config = await readDeploymentFile(new URL('../stage/config.json', import.meta.url));
 const identity = JSON.parse(execFileSync('aws', ['sts', 'get-caller-identity', '--profile', config.profile, '--output', 'json'], { encoding: 'utf8' }));
 if (identity.Account !== config.accountId) throw new Error('Wrong staging account');
 // DSQL rejects path-qualified SSO roles, so assume the stack's path-less RecoveryRole.

@@ -1,6 +1,7 @@
 // Offline baseline/default/enabled CDK comparisons. Nothing contacts AWS.
+import { accounts } from '../infra/accounts.mjs';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
@@ -29,7 +30,7 @@ for (const project of ['exampleorg', 'website']) {
         const stack = new DeliveryStack(app, 'Delivery', { env, state, origin: configuration.frontendOrigin, configuration });
         export default Template.fromStack(stack).toJSON();` : `${shared}
         import { ContactStack } from '${projectRoot}/infra/contact-stack.ts';
-        const stack = new ContactStack(app, 'Contact', { env: { account: '${environment === 'staging' ? '222222222222' : '111111111111'}', region: 'us-east-1' },
+        const stack = new ContactStack(app, 'Contact', { env: { account: '${environment === 'staging' ? accounts.staging : accounts.production}', region: 'us-east-1' },
           ${environment === 'production' ? "siteOrigin: 'https://example.com', stageName: 'prod', configurationSecretName: 'taylor-website/production/contact', reservedConcurrentExecutions: 5," : ''} });
         export default Template.fromStack(stack).toJSON();`;
       const outfile = new URL(`${name}.mjs`, output);

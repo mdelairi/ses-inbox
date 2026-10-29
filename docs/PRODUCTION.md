@@ -2,7 +2,7 @@
 
 **Live October 28, 2026:** [inbox.example.com](https://inbox.example.com). Sign in as `owner@example.net`.
 
-Real mail for all four addresses is received and sent here. support@example.org is in dual delivery: `project-inbox-exampleorg` files it here, then ExampleOrg's `StoreSupport` rule (which ends with Stop) still stores a 14-day copy and emails an alert. Disabling `StoreSupport` is ExampleOrg's step; keep `project-inbox-exampleorg` above it. Resource identifiers and the release checksum are in `production/config.json` and `production/deployment.json`.
+Real mail for all four addresses is received and sent here. support@example.org is in dual delivery: `project-inbox-exampleorg` files it here, then ExampleOrg's `StoreSupport` rule (which ends with Stop) still stores a 14-day copy and emails an alert. Disabling `StoreSupport` is ExampleOrg's step; keep `project-inbox-exampleorg` above it. Resource identifiers and the release checksum are in `production/config.example.json` and `production/deployment.example.json`.
 
 | Item | Value |
 | --- | --- |
@@ -35,7 +35,7 @@ Real mail for all four addresses is received and sent here. support@example.org 
 2. Upload the ZIP to the artifacts bucket at the `artifactKey` from `release.json`.
 3. Schema changes first: rerun `NODE_EXTRA_CA_CERTS=/etc/ssl/cert.pem node scripts/init-production-storage.mjs`. It is idempotent and never overwrites seeded aliases. New code must never run before its tables exist.
 4. Create a change set for `project-inbox-prod-app` with `ArtifactKey` set to the new key and every other parameter `UsePreviousValue=true`. Review it, then execute.
-5. Record the new checksum in `production/deployment.json`.
+5. Record the new checksum in `production/deployment.example.json`.
 
 ## Adding a receiving address
 

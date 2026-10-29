@@ -1,12 +1,13 @@
 // Administrative CLI context, never bundled into a runtime.
-import { readFile } from 'node:fs/promises';
+import { readDeploymentFile } from './lib/deployment-file.mjs';
+
 import { execFileSync } from 'node:child_process';
 import { AuroraDSQLPool } from '@aws/aurora-dsql-node-postgres-connector';
 import { fromIni } from '@aws-sdk/credential-providers';
 import { createObjectStore } from '../mail/maintenance-store.mjs';
 
 export async function productionContext({ recovery = false } = {}) {
-  const config = JSON.parse(await readFile(new URL('../production/config.json', import.meta.url)));
+  const config = await readDeploymentFile(new URL('../production/config.json', import.meta.url));
   const aws = args => JSON.parse(execFileSync('aws', [...args, '--profile', config.profile, '--region', config.region, '--output', 'json'], { encoding: 'utf8', timeout: 30000 }));
   if (aws(['sts', 'get-caller-identity']).Account !== config.accountId) throw new Error('WrongProductionAccount');
   const outputs = suffix => {

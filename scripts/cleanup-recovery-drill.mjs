@@ -1,9 +1,10 @@
 // Delete only the tagged disposable resources created by this approved drill.
+import { readDeploymentFile } from './lib/deployment-file.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fromIni } from '@aws-sdk/credential-providers';
 import { createObjectStore } from '../mail/maintenance-store.mjs';
-const config = JSON.parse(await readFile(new URL('../production/config.json', import.meta.url)));
+const config = await readDeploymentFile(new URL('../production/config.json', import.meta.url));
 const drill = JSON.parse(await readFile(new URL('../.audit/recovery-drill-resources.json', import.meta.url)));
 const proof = JSON.parse(await readFile(new URL('../.audit/recovery-cloud-drill-result.json', import.meta.url)));
 if (!/^project-inbox-recovery-drill-\d+$/.test(drill.stack) || !drill.ephemeral || !proof.actualRestore?.sqlDigestsMatched || !proof.synthetic?.physicalVersionsRemovedAtDeadline) throw new Error('CompletedDrillRequired');
@@ -12,7 +13,7 @@ if (aws(['sts', 'get-caller-identity']).Account !== config.accountId) throw new 
 const stack = aws(['cloudformation', 'describe-stacks', '--stack-name', drill.stack]).Stacks[0];
 if (!['CREATE_COMPLETE', 'UPDATE_COMPLETE'].includes(stack.StackStatus)) throw new Error('DrillStackNotReadyForCleanup');
 const output = Object.fromEntries(stack.Outputs.map(row => [row.OutputKey, row.OutputValue]));
-const source = JSON.parse(await readFile(new URL('../production/deployment.json', import.meta.url)));
+const source = await readDeploymentFile(new URL('../production/deployment.json', import.meta.url));
 if (output.Bucket === source.mailBucket || output.Host.split('.')[0] === source.mailDatabaseId || !output.Bucket.startsWith(drill.stack + '-')) throw new Error('SourceDestinationCollision');
 const cluster = aws(['dsql', 'get-cluster', '--identifier', output.Host.split('.')[0]]);
 const tags = aws(['s3api', 'get-bucket-tagging', '--bucket', output.Bucket]).TagSet;

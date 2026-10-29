@@ -1,5 +1,6 @@
 // Bounded live integration check. Temporary owner session stays in memory and is
 // explicitly revoked; only the uniquely identified synthetic draft/file is removed.
+import { readDeploymentFile } from './lib/deployment-file.mjs';
 import { createRequire } from 'node:module';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -8,7 +9,7 @@ const require = createRequire(new URL('../stage/package.json', import.meta.url))
 const { DynamoDBClient, GetItemCommand, PutItemCommand, DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
 const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { fromIni } = require('@aws-sdk/credential-providers');
-const c = JSON.parse(await readFile(new URL('../stage/config.json', import.meta.url)));
+const c = await readDeploymentFile(new URL('../stage/config.json', import.meta.url));
 const release = JSON.parse(await readFile(new URL('../build/stage/release.json', import.meta.url)));
 const identity = JSON.parse(execFileSync('aws', ['sts', 'get-caller-identity', '--profile', c.profile, '--output', 'json'], { encoding: 'utf8' }));
 if (identity.Account !== c.accountId) throw new Error('Wrong staging account');

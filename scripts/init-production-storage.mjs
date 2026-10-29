@@ -1,11 +1,12 @@
 // Explicit administrative setup for the production mail database; never bundled into a Lambda.
 // Idempotent: tables and indexes use IF NOT EXISTS, seeded aliases are never overwritten.
+import { readDeploymentFile } from './lib/deployment-file.mjs';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { AuroraDSQLClient } from '@aws/aurora-dsql-node-postgres-connector';
 import pg from 'pg';
-const config = JSON.parse(await readFile(new URL('../production/config.json', import.meta.url)));
+const config = await readDeploymentFile(new URL('../production/config.json', import.meta.url));
 const aws = args => JSON.parse(execFileSync('aws', [...args, '--profile', config.profile, '--region', config.region, '--output', 'json'], { encoding: 'utf8' }));
 if (aws(['sts', 'get-caller-identity']).Account !== config.accountId) throw new Error('Wrong production account');
 const outputs = stack => { const [detail] = aws(['cloudformation', 'describe-stacks', '--stack-name', `${config.stackPrefix}-${stack}`]).Stacks; if (!/_COMPLETE$/.test(detail.StackStatus) || /ROLLBACK|DELETE/.test(detail.StackStatus)) throw new Error(`${stack} stack is not ready`); return Object.fromEntries(detail.Outputs.map(item => [item.OutputKey, item.OutputValue])); };

@@ -16,3 +16,13 @@ client_secret*.json
 *.pem
 *.key
 *.p12
+
+# Deployment identity and records for one person's AWS resources (tracked *.example.json show the shape)
+accounts.json
+production/config.json
+production/deployment.json
+production/recovery-verification.json
+stage/config.json
+stage/deployment.json
+stage/shared-checks.json
+planning/dsql_benchmark_resources.json

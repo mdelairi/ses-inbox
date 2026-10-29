@@ -2,11 +2,12 @@
 // Creates an unexecuted change set; execution follows cloud-drill validation.
 import { readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { accounts } from '../infra/accounts.mjs';
 const hourly = process.argv.includes('--hourly');
 const artifactIndex = process.argv.indexOf('--artifact-key'), artifactKey = artifactIndex < 0 ? undefined : process.argv[artifactIndex + 1];
 if (artifactKey && !/^releases\/[a-f0-9]{64}\/lambda\.zip$/.test(artifactKey)) throw new Error('InvalidArtifactKey');
-const aws = args => { const text = execFileSync('aws', [...args, '--profile', 'example-production', '--region', 'us-east-1', '--output', 'json'], { encoding: 'utf8', timeout: 30000 }); return text.trim() ? JSON.parse(text) : {}; };
-if (aws(['sts', 'get-caller-identity']).Account !== '111111111111') throw new Error('WrongProductionAccount');
+const aws = args => { const text = execFileSync('aws', [...args, '--profile', accounts.productionProfile, '--region', accounts.region, '--output', 'json'], { encoding: 'utf8', timeout: 30000 }); return text.trim() ? JSON.parse(text) : {}; };
+if (aws(['sts', 'get-caller-identity']).Account !== accounts.production) throw new Error('WrongProductionAccount');
 const proof = JSON.parse(await readFile('.audit/recovery-cloud-drill-result.json'));
 if (!proof.actualRestore?.sqlDigestsMatched || !proof.synthetic?.deletionLedgerBlocksResurrection || !proof.synthetic?.physicalVersionsRemovedAtDeadline) throw new Error('CloudDrillRequired');
 const template = JSON.parse(await readFile('build/production/templates/recovery.json'));

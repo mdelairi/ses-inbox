@@ -1,9 +1,9 @@
 export const DOMAINS = [
-  { id: 'example.com', name: 'Example', initial: 'D', color: '#426859', aliases: [
+  { id: 'example.com', name: 'Example', initial: 'E', color: '#426859', aliases: [
     { id: 'd-info', address: 'info@example.com', name: 'Example', enabled: true, default: true, signature: 'Warm regards,\nTaylor Example' },
     { id: 'd-taylor', address: 'taylor@example.com', name: 'Taylor Example', enabled: true, default: false, signature: 'Taylor Example\nexample.com' },
   ] },
-  { id: 'example.org', name: 'ExampleOrg', initial: 'T', color: '#365f8c', aliases: [
+  { id: 'example.org', name: 'ExampleOrg', initial: 'O', color: '#365f8c', aliases: [
     { id: 't-info', address: 'info@example.org', name: 'ExampleOrg', enabled: true, default: true, signature: 'The ExampleOrg team\nexample.org' },
     { id: 't-support', address: 'support@example.org', name: 'ExampleOrg Support', enabled: true, default: false, signature: 'Taylor\nExampleOrg Support' },
   ] },

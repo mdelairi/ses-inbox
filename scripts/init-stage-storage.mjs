@@ -1,11 +1,12 @@
 // Explicit administrative setup, never bundled into the Lambda.
+import { readDeploymentFile } from './lib/deployment-file.mjs';
 import { createRequire } from 'node:module';
-import { readFile } from 'node:fs/promises';
+
 import { execFileSync } from 'node:child_process';
 const require = createRequire(new URL('../stage/package.json', import.meta.url));
 const { AuroraDSQLClient } = require('@aws/aurora-dsql-node-postgres-connector');
 const { escapeLiteral } = require('pg');
-const config = JSON.parse(await readFile(new URL('../stage/config.json', import.meta.url)));
+const config = await readDeploymentFile(new URL('../stage/config.json', import.meta.url));
 const aws = args => JSON.parse(execFileSync('aws', [...args, '--profile', config.profile, '--region', config.region, '--output', 'json'], { encoding: 'utf8' }));
 if (aws(['sts', 'get-caller-identity']).Account !== config.accountId) throw new Error('Wrong staging account');
 const stack = aws(['cloudformation', 'describe-stacks', '--stack-name', `${config.stackPrefix}-storage`]).Stacks[0];

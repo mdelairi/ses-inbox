@@ -1,5 +1,6 @@
 // Independent capture storage/queue/worker. Existing SES destinations, receipt rules,
 // producer sending switches and mailbox storage remain owned by their projects.
+import { accounts } from './accounts.mjs';
 const ref = value => ({ Ref: value }), get = (name, field) => ({ 'Fn::GetAtt': [name, field] }), sub = value => ({ 'Fn::Sub': value });
 const ctx = (why, must = []) => ({ 'com.aws.cloudformation.Context': { why, must } });
 const resource = (Type, Properties, why, must = [], extra = {}) => ({ Type, Properties, Metadata: ctx(why, must), ...extra });
@@ -18,9 +19,9 @@ export function captureTemplate() {
   return { ...base('Private automated Sent intake, source-scoped writes, durable indexing and additive SES feedback.'), Parameters: {
     ArtifactBucket: { Type: 'String', MinLength: 3 }, ArtifactKey: { Type: 'String', AllowedPattern: '^releases/[a-f0-9]{64}/lambda\\.zip$' },
     MailBucket: { Type: 'String', MinLength: 3 }, MailDatabaseHost: { Type: 'String', AllowedPattern: '^[a-z0-9]+\\.dsql\\.us-east-1\\.on\\.aws$' }, MailDatabaseArn: { Type: 'String', AllowedPattern: '^arn:aws:dsql:us-east-1:[0-9]{12}:cluster/[a-z0-9]+$' },
-    AlarmTopicArn: { Type: 'String', AllowedPattern: '^arn:aws:sns:us-east-1:111111111111:.+$' },
-    WebsiteProductionRoleArn: role('111111111111'), WebsiteStagingRoleArn: role('222222222222'), ExampleorgStagingRoleArn: role('222222222222'), ExampleorgProductionRoleArn: role('111111111111'),
-    ExampleorgStagingFeedbackTopicArn: { Type: 'String', Default: '', AllowedPattern: '^$|^arn:aws:sns:us-east-1:222222222222:.+$' },
+    AlarmTopicArn: { Type: 'String', AllowedPattern: `^arn:aws:sns:${accounts.region}:${accounts.production}:.+$` },
+    WebsiteProductionRoleArn: role(accounts.production), WebsiteStagingRoleArn: role(accounts.staging), ExampleorgStagingRoleArn: role(accounts.staging), ExampleorgProductionRoleArn: role(accounts.production),
+    ExampleorgStagingFeedbackTopicArn: { Type: 'String', Default: '', AllowedPattern: `^$|^arn:aws:sns:${accounts.region}:${accounts.staging}:.+$` },
   }, Conditions: { ...Object.fromEntries(sourceRoles.map(([name]) => [`Has${name}`, enabled(name)])), HasStagingFeedback: enabled('ExampleorgStagingFeedbackTopicArn') }, Resources: {
     DeadLetters: resource('AWS::SQS::Queue', { SqsManagedSseEnabled: true, MessageRetentionPeriod: 1209600, Tags: tags }, 'Failed capture imports remain visible and alarmed', [], retained),
     Queue: resource('AWS::SQS::Queue', { SqsManagedSseEnabled: true, MessageRetentionPeriod: 1209600, VisibilityTimeout: 360, ReceiveMessageWaitTimeSeconds: 20, RedrivePolicy: { deadLetterTargetArn: get('DeadLetters', 'Arn'), maxReceiveCount: 5 }, Tags: tags }, 'Dedicated events, never full email bodies', ['Only this capture bucket and named feedback topics may publish']),
@@ -28,8 +29,8 @@ export function captureTemplate() {
     WebsiteFeedbackPolicy: resource('AWS::SNS::TopicPolicy', { Topics: [ref('WebsiteFeedback')], PolicyDocument: topicPolicy('WebsiteFeedback') }, 'SES may publish only from the existing contact configuration set', [], conditional('HasWebsiteProductionRoleArn')),
     QueuePolicy: resource('AWS::SQS::QueuePolicy', { Queues: [ref('Queue')], PolicyDocument: { Version: '2012-10-17', Statement: [
       { Effect: 'Allow', Principal: { Service: 's3.amazonaws.com' }, Action: 'sqs:SendMessage', Resource: get('Queue', 'Arn'), Condition: { StringEquals: { 'aws:SourceAccount': ref('AWS::AccountId') }, ArnEquals: { 'aws:SourceArn': bucketArn } } },
-      maybe('HasWebsiteProductionRoleArn', { Effect: 'Allow', Principal: { Service: 'sns.amazonaws.com' }, Action: 'sqs:SendMessage', Resource: get('Queue', 'Arn'), Condition: { ArnEquals: { 'aws:SourceArn': ref('WebsiteFeedback') }, StringEquals: { 'aws:SourceAccount': '111111111111' } } }),
-      maybe('HasStagingFeedback', { Effect: 'Allow', Principal: { Service: 'sns.amazonaws.com' }, Action: 'sqs:SendMessage', Resource: get('Queue', 'Arn'), Condition: { ArnEquals: { 'aws:SourceArn': ref('ExampleorgStagingFeedbackTopicArn') }, StringEquals: { 'aws:SourceAccount': '222222222222' } } }),
+      maybe('HasWebsiteProductionRoleArn', { Effect: 'Allow', Principal: { Service: 'sns.amazonaws.com' }, Action: 'sqs:SendMessage', Resource: get('Queue', 'Arn'), Condition: { ArnEquals: { 'aws:SourceArn': ref('WebsiteFeedback') }, StringEquals: { 'aws:SourceAccount': accounts.production } } }),
+      maybe('HasStagingFeedback', { Effect: 'Allow', Principal: { Service: 'sns.amazonaws.com' }, Action: 'sqs:SendMessage', Resource: get('Queue', 'Arn'), Condition: { ArnEquals: { 'aws:SourceArn': ref('ExampleorgStagingFeedbackTopicArn') }, StringEquals: { 'aws:SourceAccount': accounts.staging } } }),
     ] } }, 'Scope S3 by account/bucket and SNS by exact topic', ['Derive the bucket ARN without Ref to avoid notification-policy cycles']),
     Intake: resource('AWS::S3::Bucket', { BucketName: bucketName, PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true }, BucketEncryption: { ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }] }, OwnershipControls: { Rules: [{ ObjectOwnership: 'BucketOwnerEnforced' }] }, VersioningConfiguration: { Status: 'Enabled' }, LifecycleConfiguration: { Rules: [{ Id: 'CaptureBufferBackstop', Prefix: 'capture/', Status: 'Enabled', ExpirationInDays: 14, NoncurrentVersionExpiration: { NoncurrentDays: 1 }, AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 } }] }, NotificationConfiguration: { QueueConfigurations: [{ Event: 's3:ObjectCreated:*', Queue: get('Queue', 'Arn'), Filter: { S3Key: { Rules: [{ Name: 'prefix', Value: 'capture/' }, { Name: 'suffix', Value: '.json' }] } } }] }, Tags: tags }, 'Private short-lived request/outcome buffer, filed copies live in the mailbox', ['Physical 15-day version sweep must be configured in recovery before enabling producers', 'Never a permanent secondary archive', 'Generated account/region name permits policy validation before bucket creation'], { ...retained, DependsOn: 'QueuePolicy' }),
     IntakePolicy: resource('AWS::S3::BucketPolicy', { Bucket: ref('Intake'), PolicyDocument: { Version: '2012-10-17', Statement: [
@@ -60,12 +61,12 @@ export function captureTemplate() {
 export function producerFeedbackTemplate() {
   return { ...base('Additive SES feedback for a reviewed producer; existing destinations are untouched.'), Parameters: {
     ConfigurationSet: { Type: 'String', AllowedPattern: '^[a-zA-Z0-9_-]+$' },
-    CaptureQueueArn: { Type: 'String', AllowedPattern: '^arn:aws:sqs:us-east-1:111111111111:.+$' },
+    CaptureQueueArn: { Type: 'String', AllowedPattern: `^arn:aws:sqs:${accounts.region}:${accounts.production}:.+$` },
   }, Resources: {
     Topic: resource('AWS::SNS::Topic', {}, 'Dedicated capture metadata feedback, not message bodies'),
     Policy: resource('AWS::SNS::TopicPolicy', { Topics: [ref('Topic')], PolicyDocument: { Version: '2012-10-17', Statement: [
       { Sid: 'AllowSesFeedback', Effect: 'Allow', Principal: { Service: 'ses.amazonaws.com' }, Action: 'sns:Publish', Resource: ref('Topic'), Condition: { StringEquals: { 'AWS:SourceAccount': ref('AWS::AccountId'), 'AWS:SourceArn': sub('arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${ConfigurationSet}') } } },
-      { Sid: 'AllowInboxQueueSubscription', Effect: 'Allow', Principal: { AWS: 'arn:aws:iam::111111111111:root' }, Action: 'sns:Subscribe', Resource: ref('Topic'), Condition: { StringEquals: { 'sns:Endpoint': ref('CaptureQueueArn'), 'sns:Protocol': 'sqs' } } },
+      { Sid: 'AllowInboxQueueSubscription', Effect: 'Allow', Principal: { AWS: `arn:aws:iam::${accounts.production}:root` }, Action: 'sns:Subscribe', Resource: ref('Topic'), Condition: { StringEquals: { 'sns:Endpoint': ref('CaptureQueueArn'), 'sns:Protocol': 'sqs' } } },
     ] } }, 'Only SES source config and the Inbox queue-owner subscription'),
     Destination: resource('AWS::SES::ConfigurationSetEventDestination', { ConfigurationSetName: ref('ConfigurationSet'), EventDestination: { Name: 'project-inbox-capture', Enabled: true, MatchingEventTypes: ['send', 'delivery', 'bounce', 'complaint', 'reject', 'deliveryDelay', 'renderingFailure'], SnsDestination: { TopicARN: ref('Topic') } } }, 'Add delivery events without replacing original feedback', [], { DependsOn: 'Policy' }),
   }, Outputs: { TopicArn: { Value: ref('Topic') } } };

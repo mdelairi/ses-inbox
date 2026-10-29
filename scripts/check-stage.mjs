@@ -2,11 +2,13 @@ import { access, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { accounts } from '../infra/accounts.mjs';
+import { readDeploymentFile } from './lib/deployment-file.mjs';
 const root = new URL('../', import.meta.url);
-const config = JSON.parse(await readFile(new URL('stage/config.json', root)));
+const config = await readDeploymentFile(new URL('stage/config.json', root));
 const checks = [], add = (label, ok, detail = '') => checks.push({ label, ok, ...(detail ? { detail } : {}) });
-add('Staging account and region are isolated', config.environment === 'staging' && config.accountId === '222222222222' && config.region === 'us-east-1');
-add('Owner account is explicit', config.ownerEmail === 'owner@example.net');
+add('Staging account and region are isolated', config.environment === 'staging' && config.accountId === accounts.staging && config.region === accounts.region);
+add('Owner account is explicit', config.ownerEmail === accounts.ownerEmail);
 add('Dedicated Example staging hostname', /^[a-z0-9-]+\.example\.com$/.test(config.hostname));
 for (const field of ['googleSecretArn', 'certificateArn', 'artifactBucket', 'mailBucket', 'mailDatabaseHost', 'mailDatabaseArn']) add(`${field} is configured`, Boolean(config[field]));
 try { await access(new URL('stage/package-lock.json', root)); add('Staging dependency lockfile exists', true); }

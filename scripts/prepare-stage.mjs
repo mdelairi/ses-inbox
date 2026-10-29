@@ -1,3 +1,4 @@
+import { readDeploymentFile } from './lib/deployment-file.mjs';
 import { cp, mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { artifactTemplate, certificateTemplate, applicationTemplate, storageTemplate } from '../infra/stage.mjs';
@@ -41,7 +42,7 @@ await writeFile(new URL('assets-manifest.json', output), JSON.stringify(assets, 
 const sources = {};
 for (const file of await list(new URL('source/', output))) sources[file] = sha(await readFile(new URL(`source/${file}`, output)));
 const releaseId = sha(JSON.stringify({ assets, sources, templates }));
-const config = JSON.parse(await readFile(new URL('stage/config.json', root)));
+const config = await readDeploymentFile(new URL('stage/config.json', root));
 const manifest = { releaseId, scope: config.scope, environment: 'staging', proposedOrigin: `https://${config.hostname}`, assets, sources, cloudResourcesCreated: false, authenticationBundleBuilt: false };
 await writeFile(new URL('release.json', output), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Staging source prepared: build/stage/\nRelease: ${releaseId}\nNo AWS resources created. Authentication dependency install and Lambda packaging still required.`);

@@ -2,7 +2,7 @@
 
 **Live and verified October 28, 2026.** Production has self-contained backups, an independent deletion ledger, resumable purge and hourly retention maintenance. A full isolated cloud restore and synthetic deletion/retention drill passed. Maintenance is enabled at `rate(1 hour)` after successful scheduled execution at an accelerated cadence. The temporary drill database and bucket have been removed.
 
-Deployment resources and checksums are in [production/deployment.json](production/deployment.json); durable evidence and verification limits are in [production/recovery-verification.json](production/recovery-verification.json).
+Deployment resources and checksums are in [production/deployment.example.json](../production/deployment.example.json); durable evidence and verification limits are in [production/recovery-verification.example.json](../production/recovery-verification.example.json).
 
 ## Completed live preservation
 

@@ -1,11 +1,12 @@
 // Creates the Web Push VAPID key pair in Secrets Manager, once. Prints only the secret ARN;
 // the private key never leaves AWS. Re-running leaves an existing secret untouched, because
 // replacing the keys would silently break every enrolled device.
-import { readFile } from 'node:fs/promises';
+import { readDeploymentFile } from './lib/deployment-file.mjs';
+
 import { SecretsManagerClient, CreateSecretCommand, DescribeSecretCommand } from '@aws-sdk/client-secrets-manager';
 import webpush from 'web-push';
 
-const config = JSON.parse(await readFile(new URL('../production/config.json', import.meta.url)));
+const config = await readDeploymentFile(new URL('../production/config.json', import.meta.url));
 process.env.AWS_PROFILE ||= config.profile;
 const secrets = new SecretsManagerClient({ region: config.region }), Name = `${config.stackPrefix}/push-vapid`;
 let arn;

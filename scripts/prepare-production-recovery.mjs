@@ -1,9 +1,10 @@
 // Uploads a content-addressed release and creates review-only change sets. Never executes them.
+import { readDeploymentFile } from './lib/deployment-file.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 if (!process.argv.includes('--aws')) throw new Error('Use --aws to upload the release and create unexecuted change sets');
-const root = new URL('../', import.meta.url), config = JSON.parse(await readFile(new URL('production/config.json', root)));
+const root = new URL('../', import.meta.url), config = await readDeploymentFile(new URL('production/config.json', root));
 const release = JSON.parse(await readFile(new URL('build/production/release.json', root)));
 const aws = args => JSON.parse(execFileSync('aws', [...args, '--profile', config.profile, '--region', config.region, '--output', 'json'], { encoding: 'utf8', timeout: 30000 }));
 if (aws(['sts', 'get-caller-identity']).Account !== config.accountId) throw new Error('WrongProductionAccount');

@@ -1,10 +1,11 @@
 // Execute the already authorized, narrowly scoped recovery activation/cadence change.
 import { readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { accounts } from '../infra/accounts.mjs';
 const suffix = process.argv.includes('--hourly') ? 'hourly' : 'scheduled-canary';
 const change = JSON.parse(await readFile(`.audit/recovery-${suffix}-change-set.json`));
-const aws = args => { const text = execFileSync('aws', [...args, '--profile', 'example-production', '--region', 'us-east-1', '--output', 'json'], { encoding: 'utf8', timeout: 30000 }); return text.trim() ? JSON.parse(text) : {}; };
-if (aws(['sts', 'get-caller-identity']).Account !== '111111111111') throw new Error('WrongProductionAccount');
+const aws = args => { const text = execFileSync('aws', [...args, '--profile', accounts.productionProfile, '--region', accounts.region, '--output', 'json'], { encoding: 'utf8', timeout: 30000 }); return text.trim() ? JSON.parse(text) : {}; };
+if (aws(['sts', 'get-caller-identity']).Account !== accounts.production) throw new Error('WrongProductionAccount');
 let detail;
 for (let i = 0; ; i++) {
   detail = aws(['cloudformation', 'describe-change-set', '--change-set-name', change.Id]);

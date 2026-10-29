@@ -1,0 +1,10 @@
+{
+  "$comment": "Copy to accounts.json (gitignored) and fill in your own values. Placeholders here keep the local preview and tests working without AWS.",
+  "production": "111111111111",
+  "staging": "222222222222",
+  "management": "333333333333",
+  "productionProfile": "example-production",
+  "stagingProfile": "example-staging",
+  "region": "us-east-1",
+  "ownerEmail": "owner@example.net"
+}

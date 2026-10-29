@@ -1,6 +1,6 @@
 # Automated Sent capture
 
-**Website production capture is live** (enabled 2026-10-29 03:39 UTC). The capture stack `project-inbox-prod-capture` and Inbox release `f664a0b…` run in production; the owner confirmed a real contact submission was delivered and appears in the Inbox. **ExampleOrg staging capture is live** (enabled 2026-10-29 05:26 UTC): two real staging invitations reached Gmail and were filed in no-reply@example.org Sent as automated/staging with status delivered. Identifiers are in `production/deployment.json` under `capture`.
+**Website production capture is live** (enabled 2026-10-29 03:39 UTC). The capture stack `project-inbox-prod-capture` and Inbox release `f664a0b…` run in production; the owner confirmed a real contact submission was delivered and appears in the Inbox. **ExampleOrg staging capture is live** (enabled 2026-10-29 05:26 UTC): two real staging invitations reached Gmail and were filed in no-reply@example.org Sent as automated/staging with status delivered. Identifiers are in `production/deployment.example.json` under `capture`.
 
 ## Coverage and source changes
 
@@ -17,7 +17,7 @@ Sign-up codes, verification and password-reset messages remain excluded. The gen
 
 Learning classifications explicitly map assignments, due reminders, each of the three overdue-reminder rounds, weekly digests and marking notifications. An unfamiliar future learning kind keeps its existing delivery path without capture; it is never silently labelled as an overdue reminder. Review newly added producer paths before rollout. The local contract harness resolves ExampleOrg's digest exports from the source checkout so source drift fails visibly instead of using stale formatter copies.
 
-The applied diffs are in [integrations/producer-patches](integrations/producer-patches). Their manifest records the original/applied hashes; `node scripts/prepare-producer-patches.mjs` verifies applied files and reconstructs the baseline without editing either checkout. `node scripts/apply-producer-patches.mjs` previews exact local writes; `--apply` accepts only unchanged baselines and refuses unrelated edits. Implemented changes:
+The applied diffs are in [integrations/producer-patches](../integrations/producer-patches). Their manifest records the original/applied hashes; `node scripts/prepare-producer-patches.mjs` verifies applied files and reconstructs the baseline without editing either checkout. `node scripts/apply-producer-patches.mjs` previews exact local writes; `--apply` accepts only unchanged baselines and refuses unrelated edits. Implemented changes:
 
 - ExampleOrg: wrap the existing calls in `library/server/invitation-mail.mjs` and `library/server/learning-mail.mjs`; add an opt-in bucket/source environment setting and prefix-scoped S3 permission in `infra/delivery-stack.ts`. Add the adapter and two shared helper modules listed in the patch manifest. No new dependency is needed.
 - Website: wrap the existing SES call in `functions/contact/handler.ts`; add the opt-in bucket/source setting and prefix-scoped S3 permission in `infra/contact-stack.ts`. Add the adapter and two shared helper modules. Add `@aws-sdk/client-s3` at the existing AWS SDK version, 3.1141.0, updating its lockfile.

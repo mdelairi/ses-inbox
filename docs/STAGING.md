@@ -2,7 +2,7 @@
 
 **Live and verified October 27, 2026; retention release October 28, 2026:** [Open the staging inbox](https://stage.example.com). Sign in as `owner@example.net`.
 
-Deployed using the installed Agent Toolkit for AWS skills and their documented CLI fallback. The certificate, private release storage, authentication service, CloudFront distribution, and shared sample-data storage are deployed. This release contains sample mail only; it cannot send real email. Current resource identifiers and release checksum are recorded in `stage/config.json` and `stage/deployment.json`.
+Deployed using the installed Agent Toolkit for AWS skills and their documented CLI fallback. The certificate, private release storage, authentication service, CloudFront distribution, and shared sample-data storage are deployed. This release contains sample mail only; it cannot send real email. Current resource identifiers and release checksum are recorded in `stage/config.example.json` and `stage/deployment.example.json`.
 
 ## Scope and destination
 
@@ -62,7 +62,7 @@ Store the credential in a staging Secrets Manager secret with this JSON shape, e
 {"clientId":"GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com","clientSecret":"GOOGLE_WEB_CLIENT_SECRET"}
 ```
 
-Do not paste the secret into chat, commit it, put it in `stage/config.json`, or pass it as a literal shell argument. The Lambda retrieves it at runtime. The first successful verified owner login pins Google's stable `sub`; changing that pin is an explicit recovery operation. [Google's server sign-in flow](https://developers.google.com/identity/openid-connect/openid-connect).
+Do not paste the secret into chat, commit it, put it in `stage/config.example.json`, or pass it as a literal shell argument. The Lambda retrieves it at runtime. The first successful verified owner login pins Google's stable `sub`; changing that pin is an explicit recovery operation. [Google's server sign-in flow](https://developers.google.com/identity/openid-connect/openid-connect).
 
 ## Local preparation commands
 
@@ -104,7 +104,7 @@ Copy `stage/entry.mjs` to `.audit/stage-entry.js` before this command, preservin
 
 Production SES receiving, real sent capture, a verified production deletion/recovery guarantee, the relational mail repository/server search, and iPhone background push remain outside this sample-stage release.
 
-The production storage design is specified in [BACKEND_STORAGE.md](BACKEND_STORAGE.md). A separately approved disposable DSQL benchmark tests its schema/search primitives; [results and cleanup](planning/STORAGE_BENCHMARK.md) are recorded independently of this deployment. That earlier experiment is independent of the retained shared-sample storage described below.
+The production storage design is specified in [BACKEND_STORAGE.md](BACKEND_STORAGE.md). A separately approved disposable DSQL benchmark tests its schema/search primitives; [results and cleanup](../planning/STORAGE_BENCHMARK.md) are recorded independently of this deployment. That earlier experiment is independent of the retained shared-sample storage described below.
 
 ## Shared sample storage release
 
@@ -152,7 +152,7 @@ Release `7644d5db…` runs the app and the cleanup Lambda. The hourly schedule i
   The dry run and the restore each hold the maintenance lock briefly, so saves from the app may need a retry.
 - **Not covered:** this is a sample-stage mechanism. A verified restore drill and a production retention guarantee are still required before real email is connected.
 
-Live integration evidence is in `stage/shared-checks.json`. The check used a temporary in-memory owner session, verified the pinned owner, exercised real CloudFront/Lambda/DSQL/S3 saves, checksum-protected state/file reads, stale-write rejection, and denial of new download links for removed files. It removed only its uniquely identified synthetic draft/file and revoked its test session. No owner session token, signed URL, or message content is written to the evidence file. The hosted shared inbox was also opened successfully in the owner’s existing Chrome session.
+Live integration evidence is in `stage/shared-checks.example.json`. The check used a temporary in-memory owner session, verified the pinned owner, exercised real CloudFront/Lambda/DSQL/S3 saves, checksum-protected state/file reads, stale-write rejection, and denial of new download links for removed files. It removed only its uniquely identified synthetic draft/file and revoked its test session. No owner session token, signed URL, or message content is written to the evidence file. The hosted shared inbox was also opened successfully in the owner’s existing Chrome session.
 
 To repeat the bounded live check after a reviewed deployment:
 
