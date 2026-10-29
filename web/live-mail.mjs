@@ -184,6 +184,56 @@ export async function attachmentUrl(file) {
   return (await call('/api/mail/attachment', { mailbox: file.mailbox, id: file.messageId, part: file.id })).url;
 }
 
+export const forwarding = {
+  rules: mailbox => call('/api/mail/forwarding', { mailbox }),
+  save: (mailbox, targets) => call('/api/mail/forwarding/save', { mailbox, targets }),
+};
+
+// Push notifications for this device. The browser subscription is enrolled with the server's
+// VAPID key; the server id is kept locally so this device can turn itself off.
+const DEVICE_KEY = 'inbox-push-device';
+const keyBytes = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=')), char => char.charCodeAt(0));
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function deviceLabel() {
+  const agent = navigator.userAgent, platform = /iPhone/.test(agent) ? 'iPhone' : /iPad|Macintosh.*Mobile/.test(agent) ? 'iPad' : /Android/.test(agent) ? 'Android' : /Mac/.test(agent) ? 'Mac' : /Windows/.test(agent) ? 'Windows' : 'Device';
+  const browser = /Edg\//.test(agent) ? 'Edge' : /Firefox\//.test(agent) ? 'Firefox' : /Chrome\//.test(agent) ? 'Chrome' : /Safari\//.test(agent) ? 'Safari' : 'Browser';
+  return `${platform} · ${standalone() ? 'Home Screen app' : browser}`;
+}
+export const notifications = {
+  supported: () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
+  // iPhone and iPad allow web push only from the Home Screen app.
+  needsHomeScreen: () => /iPhone|iPad|Macintosh.*Mobile/.test(navigator.userAgent) && navigator.maxTouchPoints > 0 && !standalone(),
+  register: () => navigator.serviceWorker.register('/sw.js', { scope: '/' }),
+  async status() {
+    const supported = this.supported(), registration = supported ? await navigator.serviceWorker.getRegistration('/') : null;
+    const subscription = registration ? await registration.pushManager.getSubscription() : null;
+    let device = null; try { device = localStorage.getItem(DEVICE_KEY); } catch { /* optional */ }
+    return { supported, permission: supported ? Notification.permission : 'unsupported', enrolled: Boolean(subscription && device), devices: await call('/api/push/devices'), device };
+  },
+  // Permission is requested first, while the click still counts as a user gesture.
+  async enable() {
+    if (!this.supported()) throw new Error('This browser cannot show notifications.');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') throw new Error(permission === 'denied' ? 'Notifications are blocked for this site. Allow them in your browser or device settings.' : 'Notifications were not allowed.');
+    const registration = await this.register(); await navigator.serviceWorker.ready;
+    const { publicKey } = await call('/api/push/key'), key = keyBytes(publicKey);
+    let subscription = await registration.pushManager.getSubscription();
+    const current = subscription?.options?.applicationServerKey && new Uint8Array(subscription.options.applicationServerKey);
+    if (subscription && current && (current.length !== key.length || current.some((byte, i) => byte !== key[i]))) { await subscription.unsubscribe(); subscription = null; }
+    subscription ||= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    const { id } = await call('/api/push/subscribe', { subscription: subscription.toJSON(), label: deviceLabel() });
+    try { localStorage.setItem(DEVICE_KEY, id); } catch { /* optional */ }
+  },
+  async disable() {
+    let device = null; try { device = localStorage.getItem(DEVICE_KEY); localStorage.removeItem(DEVICE_KEY); } catch { /* optional */ }
+    if (device) await call('/api/push/remove', { id: device });
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    await (await registration?.pushManager.getSubscription())?.unsubscribe();
+  },
+  remove: id => call('/api/push/remove', { id }),
+  test: () => call('/api/push/test'),
+};
+
 // attemptId lives on the composer, so pressing Send again after an error never sends twice.
 export async function sendDraft(composer) {
   const wire = await encodeDraft(composer);

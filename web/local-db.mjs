@@ -36,3 +36,6 @@ export async function loadConversation() {}
 export async function searchMail() { return null; }
 export async function attachmentUrl() { return null; }
 export async function sendDraft() { throw new Error('Sending is not available in this preview.'); }
+// The local preview has no server: no forwarding or push enrollment.
+export const forwarding = null;
+export const notifications = null;

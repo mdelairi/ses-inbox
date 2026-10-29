@@ -19,6 +19,9 @@ const headers = {
   'permissions-policy': 'camera=(), microphone=(), geolocation=()',
   'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
 };
+// Fetched by the browser itself (Home Screen install, service-worker updates), possibly without
+// the session cookie. They hold no mail or account data.
+export const PUBLIC_ASSETS = new Set(['/sw.js', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png']);
 class Rejection extends Error {
   constructor(status) { super('Request rejected'); this.status = status; }
 }
@@ -114,6 +117,13 @@ export function createStageHandler({ origin, ownerEmail, store, getGoogleClient,
         await store.put(active);
         // Google access/refresh/ID tokens never go into the browser or session table.
         return redirect('/', [cookie(sessionCookie, value, SESSION_SECONDS), cookie(loginCookie, '', 0)]);
+      }
+      if (PUBLIC_ASSETS.has(path)) {
+        const file = await asset(path);
+        if (!file) return response(404, 'Not found', 'text/plain');
+        const result = response(200, method === 'HEAD' ? '' : file.body, file.type);
+        if (file.base64 && method !== 'HEAD') result.isBase64Encoded = true;
+        return result;
       }
       const active = await session(event);
       if (!active) return path === '/' ? redirect('/signin') : json(401, { error: 'Sign in required' });

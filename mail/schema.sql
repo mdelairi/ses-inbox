@@ -138,6 +138,44 @@ CREATE TABLE IF NOT EXISTS mail.send_attempts (
 CREATE UNIQUE INDEX ASYNC IF NOT EXISTS send_attempts_ses ON mail.send_attempts(ses_message_id);
 CREATE INDEX ASYNC IF NOT EXISTS send_attempts_message ON mail.send_attempts(domain_id, message_id);
 
+-- Automatic forwarding of new Inbox mail, per receiving address.
+CREATE TABLE IF NOT EXISTS mail.forward_rules (
+  domain_id UUID NOT NULL,
+  alias_id UUID NOT NULL,
+  target VARCHAR(254) NOT NULL,
+  created_at TIMESTAMP NOT NULL,
+  PRIMARY KEY (domain_id, alias_id, target)
+);
+
+-- One row per forwarded copy, written before SES is called: a redelivered message never forwards twice.
+CREATE TABLE IF NOT EXISTS mail.forward_attempts (
+  domain_id UUID NOT NULL,
+  attempt_id UUID NOT NULL,
+  alias_id UUID NOT NULL,
+  message_id UUID NOT NULL,
+  target VARCHAR(254) NOT NULL,
+  state VARCHAR(16) NOT NULL,
+  ses_message_id VARCHAR(128),
+  detail TEXT,
+  updated_at TIMESTAMP NOT NULL,
+  revision INTEGER NOT NULL,
+  PRIMARY KEY (domain_id, attempt_id)
+);
+
+-- Devices enrolled for new-mail notifications. Endpoints are capability URLs; never log them.
+CREATE TABLE IF NOT EXISTS mail.push_subscriptions (
+  subscription_id UUID PRIMARY KEY,
+  endpoint_hash VARCHAR(64) NOT NULL,
+  endpoint TEXT NOT NULL,
+  p256dh VARCHAR(128) NOT NULL,
+  auth VARCHAR(64) NOT NULL,
+  label VARCHAR(120) NOT NULL,
+  created_at TIMESTAMP NOT NULL,
+  last_success_at TIMESTAMP,
+  revision INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX ASYNC IF NOT EXISTS push_endpoint ON mail.push_subscriptions(endpoint_hash);
+
 -- Durable last-reference retirement fence. Keep it after cleanup to block stale publication.
 CREATE TABLE IF NOT EXISTS mail.purge_jobs (
   domain_id UUID NOT NULL,

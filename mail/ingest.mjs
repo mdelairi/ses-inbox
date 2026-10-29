@@ -63,7 +63,7 @@ export async function ingestNotification({ notification, repo, objects, bucket, 
     };
     const folder = quarantined || failed(receipt.spamVerdict) ? 'spam' : 'inbox';
     const { delivered } = await repo.publish({ receipt: { key: receiptKey, token: claim.token }, message, rfcHash: parsed.rfcMessageId && rfcHash(parsed.rfcMessageId), aliasIds, folder });
-    results.push({ domainId, status: 'published', messageId, threadId, folder, delivered });
+    results.push({ domainId, status: 'published', messageId, threadId, folder, delivered, addresses: delivered.map(id => aliases.find(alias => alias.aliasId === id).address) });
   }
-  return { unrouted: false, results };
+  return { unrouted: false, results, parsed };
 }

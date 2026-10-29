@@ -7,12 +7,12 @@ import { createRepository, transaction } from './repository.mjs';
 
 export const MAX_RECIPIENTS = 50;
 export const MAX_SEND_BYTES = 40 * 1024 * 1024; // SES v2 raw message limit
-const ADDRESS = /^[^\s@<>(),;:"\\]+@[^\s@<>(),;:"\\]+\.[^\s@<>(),;:"\\]+$/;
+export const ADDRESS = /^[^\s@<>(),;:"\\]+@[^\s@<>(),;:"\\]+\.[^\s@<>(),;:"\\]+$/;
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value || '') ? value : fail('Invalid identifier');
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 // Rejections SES reports definitively; anything else (timeouts, 5xx) has an unknown outcome.
-const DEFINITE = new Set(['MessageRejected', 'MailFromDomainNotVerifiedException', 'AccountSuspendedException', 'SendingPausedException', 'BadRequestException', 'NotFoundException', 'LimitExceededException', 'TooManyRequestsException']);
+export const DEFINITE = new Set(['MessageRejected', 'MailFromDomainNotVerifiedException', 'AccountSuspendedException', 'SendingPausedException', 'BadRequestException', 'NotFoundException', 'LimitExceededException', 'TooManyRequestsException']);
 // Final state wins over interim ones; a late DeliveryDelay never downgrades a delivery.
 export const SEND_STATE_RANK = { sending: 0, sent: 1, delayed: 2, delivered: 3, bounced: 4, complained: 4, rejected: 4, failed: 4, uncertain: 1 };
 const EVENT_STATES = { Send: 'sent', Delivery: 'delivered', Bounce: 'bounced', Complaint: 'complained', Reject: 'rejected', DeliveryDelay: 'delayed', RenderingFailure: 'failed' };

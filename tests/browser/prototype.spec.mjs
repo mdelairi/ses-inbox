@@ -95,6 +95,10 @@ test('untrusted pasted email HTML cannot execute or fetch remote images', async 
 test('phone navigation, compose and settings fit the viewport', async ({ page }) => {
   await mailbox(page, 'taylor@example.com');
   await page.setViewportSize({ width: 390, height: 844 });
+  // The list column must not grow to its longest snippet: refresh, filters and bulk actions stay on screen.
+  expect(await page.evaluate(() => document.querySelector('.message-list').scrollWidth <= innerWidth)).toBe(true);
+  await page.locator('.row-check input').first().check(); await expect(page.getByRole('button', { name: 'Forward selected' })).toBeInViewport();
+  await page.getByRole('button', { name: 'Clear selection' }).click();
   await page.getByRole('button', { name: 'Open A conversation about the next workshop', exact: true }).click(); await expect(page.getByRole('heading', { name: 'A conversation about the next workshop', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Back to message list' }).click(); await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('button', { name: 'Compose', exact: true }).click(); await expect(page.locator('#compose-dialog')).toBeVisible();

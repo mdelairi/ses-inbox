@@ -16,7 +16,7 @@ function harness() {
     getGoogleClient: async () => ({ clientId: 'client', clientSecret: 'secret' }),
     exchangeCode: async () => { exchanges++; return 'signed-id-token'; },
     verifyGoogleToken: async () => claims,
-    asset: async path => path === '/' || path === '/app.mjs' ? { type: 'text/plain', body: 'protected asset' } : null,
+    asset: async path => path === '/' || path === '/app.mjs' ? { type: 'text/plain', body: 'protected asset' } : path === '/sw.js' ? { type: 'text/javascript', body: 'worker' } : null,
   });
   const request = (path, cookie = [], options = {}) => handler({ rawPath: path, cookies: cookie, requestContext: { http: { method: 'GET' } }, headers: {}, ...options });
   async function login(nextClaims = {}) {
@@ -35,6 +35,13 @@ test('all application assets and session metadata require a valid owner session'
   for (const path of ['/app.mjs', '/fixtures.mjs', '/auth/session', '/api/send']) assert.equal((await app.request(path)).statusCode, 401);
   assert.equal((await app.request('/app.mjs', [], { requestContext: { http: { method: 'HEAD' } } })).statusCode, 401);
   const page = await app.request('/signin'); assert.equal(page.statusCode, 200); assert.match(page.headers['cache-control'], /no-store/); assert.match(page.headers['content-security-policy'], /frame-ancestors 'none'/);
+});
+test('only the service worker, manifest and icons are served without a session', async () => {
+  const app = harness(), worker = await app.request('/sw.js');
+  assert.equal(worker.statusCode, 200); assert.equal(worker.body, 'worker'); assert.match(worker.headers['cache-control'], /no-store/);
+  assert.equal((await app.request('/icon-192.png')).statusCode, 404, 'a missing public file is not found, not a sign-in prompt');
+  for (const path of ['/app.mjs', '/sw.js/', '/SW.js', '/index.html']) assert.equal((await app.request(path)).statusCode, 401);
+  assert.equal((await app.request('/sw.js', [], { requestContext: { http: { method: 'POST' } } })).statusCode, 405);
 });
 test('login uses state, nonce, S256 PKCE and a secure browser-binding cookie', async () => {
   const app = harness(), { start, url, entry } = await app.login();

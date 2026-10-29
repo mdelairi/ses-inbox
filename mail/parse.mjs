@@ -33,6 +33,8 @@ export async function parseMessage(raw) {
     sentAt: sent && !Number.isNaN(+sent) ? sent.toISOString() : null,
     text: parsed.text || '', html: typeof parsed.html === 'string' ? parsed.html : '',
     attachments, attachmentsOmitted: Math.max(0, parsed.attachments.length - MAX_ATTACHMENTS),
+    // Set on copies this app forwarded; a copy that comes back is never forwarded again.
+    forwarded: parsed.headers.has('x-inbox-forwarded'),
   };
 }
 

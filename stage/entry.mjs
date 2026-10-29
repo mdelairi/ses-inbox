@@ -44,7 +44,7 @@ async function exchangeCode({ code, verifier, callback, clientId, clientSecret }
   return value.id_token;
 }
 const manifest = JSON.parse(await readFile(new URL('./assets-manifest.json', import.meta.url)));
-const mime = { '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
+const mime = { '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2' };
 const cachedAssets = new Map();
 async function asset(path) {
   const name = path === '/' ? 'index.html' : path.slice(1);
@@ -58,6 +58,6 @@ async function asset(path) {
 // MAIL_MODE=real serves the relational mail repository; otherwise the sample workspace bridge.
 const storage = process.env.MAIL_BUCKET && process.env.MAIL_DATABASE_HOST ? { bucket: process.env.MAIL_BUCKET, host: process.env.MAIL_DATABASE_HOST, region } : null;
 const api = !storage ? undefined : process.env.MAIL_MODE === 'real'
-  ? createRealMailApi({ ...storage, configurationSet: process.env.SES_CONFIGURATION_SET, environment: process.env.MAIL_ENVIRONMENT || 'production' })
+  ? createRealMailApi({ ...storage, configurationSet: process.env.SES_CONFIGURATION_SET, environment: process.env.MAIL_ENVIRONMENT || 'production', vapidSecretArn: process.env.VAPID_SECRET_ARN })
   : createCloudMailApi(storage);
 export const handler = createStageHandler({ origin: process.env.PUBLIC_ORIGIN, ownerEmail: process.env.OWNER_EMAIL, store, getGoogleClient, exchangeCode, verifyGoogleToken, asset, api, storageOrigin: api ? `https://${process.env.MAIL_BUCKET}.s3.us-east-1.amazonaws.com` : undefined, log: data => console.error('stage-request-failed', data) });

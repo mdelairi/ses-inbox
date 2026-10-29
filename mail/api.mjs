@@ -1,14 +1,24 @@
 import { createMailbox } from './mailbox.mjs';
 import { createDrafts } from './drafts.mjs';
 import { createSender } from './send.mjs';
+import { createForwarding } from './forwarding.mjs';
 
 // RPC-style JSON API behind the owner-only gateway (stage/auth.mjs): every call is a POST,
-// so reads also pass its origin, CSRF and body-hash checks.
-export function createMailApi({ pool, objects, ses, bucket, configurationSet, environment, now = Date.now }) {
+// so reads also pass its origin, CSRF and body-hash checks. push is optional (mail/push.mjs).
+export function createMailApi({ pool, objects, ses, bucket, configurationSet, environment, push, now = Date.now }) {
   const mailbox = createMailbox({ pool, objects });
   const drafts = createDrafts({ pool, objects, mailbox, now });
   const sender = createSender({ pool, objects, ses, mailbox, bucket, configurationSet, environment, now });
+  const forwarding = createForwarding({ pool, ses, mailbox, configurationSet, now });
+  const pushed = handler => body => { if (!push) throw Object.assign(new Error('Notifications are not set up for this inbox.'), { status: 503 }); return handler(body); };
   const routes = {
+    '/api/mail/forwarding': body => forwarding.rules(body),
+    '/api/mail/forwarding/save': body => forwarding.save(body),
+    '/api/push/key': pushed(() => push.key()),
+    '/api/push/devices': pushed(() => push.devices()),
+    '/api/push/subscribe': pushed(body => push.subscribe(body)),
+    '/api/push/remove': pushed(body => push.remove(body)),
+    '/api/push/test': pushed(() => push.notify({ title: 'Inbox', body: 'Notifications are working on this device.', tag: 'inbox-test', url: '/' })),
     '/api/mail/mailboxes': () => mailbox.aliases(),
     '/api/mail/entries': body => mailbox.entries({ limit: body.limit }),
     '/api/mail/threads': body => mailbox.listThreads(body),

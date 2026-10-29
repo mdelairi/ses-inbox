@@ -34,14 +34,20 @@ test('SES may only write incoming/ from this inbox\'s rules; topics and queue ac
   assert.equal(storage.WorkQueue.Properties.RedrivePolicy.maxReceiveCount, 5);
   assert.equal(storage.WorkQueue.Properties.VisibilityTimeout, applicationTemplate().Resources.Worker.Properties.Timeout * 6);
 });
-test('the app may send only from the two domains; the worker cannot send or delete', () => {
+test('the app and the forwarding worker may send only from the two domains; the worker cannot delete', () => {
   const app = applicationTemplate().Resources;
   const appPolicy = statements(app.AppRole), workerPolicy = statements(app.WorkerRole);
   const send = appPolicy.find(statement => statement.Action.includes('ses:SendEmail'));
   assert.deepEqual(send.Condition.StringLike['ses:FromAddress'], ['*@example.com', '*@example.org']);
   assert.ok(appPolicy.every(statement => statement.Resource !== '*'));
   assert.doesNotMatch(JSON.stringify(appPolicy), /ses:(Create|Delete|Update|Set)|ReceiptRule|route53|iam:|DbConnectAdmin|incoming/);
-  assert.doesNotMatch(JSON.stringify(workerPolicy), /ses:|s3:Delete|DbConnectAdmin|drafts|uploads/); // sqs:DeleteMessage acknowledges records
+  const forward = workerPolicy.filter(statement => JSON.stringify(statement.Action).includes('ses:'));
+  assert.equal(forward.length, 1); assert.deepEqual(forward[0].Action, ['ses:SendRawEmail']);
+  assert.deepEqual(forward[0].Condition.StringLike['ses:FromAddress'], ['*@example.com', '*@example.org']);
+  assert.ok(workerPolicy.every(statement => statement.Resource !== '*'));
+  assert.doesNotMatch(JSON.stringify(workerPolicy.filter(statement => statement !== forward[0])), /ses:|s3:Delete|DbConnectAdmin|drafts|uploads/); // sqs:DeleteMessage acknowledges records
+  for (const role of [appPolicy, workerPolicy]) assert.ok(role.find(statement => statement.Action.includes('secretsmanager:GetSecretValue')));
+  assert.deepEqual(app.Worker.Properties.Environment.Variables.VAPID_SECRET_ARN, { Ref: 'VapidSecretArn' });
   assert.equal(app.App.Properties.Environment.Variables.MAIL_MODE, 'real');
   assert.equal(app.AppUrl.Properties.AuthType, 'AWS_IAM');
   assert.equal(applicationTemplate().Parameters.EnableDistribution.Default, 'false');

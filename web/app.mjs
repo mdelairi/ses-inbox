@@ -1,6 +1,6 @@
 import { seedState } from './fixtures.mjs';
 import { FOLDERS, MAX_FILE_BYTES, MAX_TOTAL_BYTES, domainOf, aliasesOf, defaultAlias, createSearchIndex, visibleThreads, conversation, mailboxEntries, inMailbox, setMailboxState, mailboxesOf, selectedMailbox, sendLocally, moveMessages, permanentlyDelete, saveAlias } from './model.mjs';
-import { loadState, persistState, sharedStorage, hasUnsavedChanges, storageActions, liveMail, loadConversation, searchMail, attachmentUrl, sendDraft } from './local-db.mjs';
+import { loadState, persistState, sharedStorage, hasUnsavedChanges, storageActions, liveMail, loadConversation, searchMail, attachmentUrl, sendDraft, forwarding, notifications } from './local-db.mjs';
 import { escapeHTML as esc, sanitizeHTML, safeLink, htmlText, messageDocument } from './safety.mjs';
 
 const paths = {
@@ -33,6 +33,7 @@ const paths = {
   list: '<path d="M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1"/>',
   storage: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>',
   undo: '<path d="m9 4-6 6 6 6M3 10h11a7 7 0 0 1 0 14"/>',
+  read: '<path d="M3 10 12 4l9 6v10H3V10Z"/><path d="m3 10 9 6 9-6"/>',
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.mail}</svg>`;
 const folderNames = { inbox: 'Inbox', sent: 'Sent', drafts: 'Drafts', archive: 'Archive', trash: 'Trash', spam: 'Spam' };
@@ -42,8 +43,10 @@ const composeDialog = document.querySelector('#compose-dialog');
 const settingsDialog = document.querySelector('#settings-dialog');
 const aliasDialog = document.querySelector('#alias-dialog');
 const confirmDialog = document.querySelector('#confirm-dialog');
-let state, index, view = { folder: 'inbox', selected: null, query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, domainMenu: false, filters: false, more: false };
-let composer = null, draftTimer, saveQueue = Promise.resolve(), settingsTab = 'aliases', settingsDomain, confirmCallback, lastRange, refreshing = false;
+let state, index, view = { folder: 'inbox', selected: null, checked: [], query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, domainMenu: false, filters: false, more: false };
+let composer = null, draftTimer, saveQueue = Promise.resolve(), settingsTab = 'aliases', settingsDomain, confirmCallback, lastRange, refreshing = false, lastChecked = null, pushStatus = null;
+// Live forwarding rules by receiving address, loaded when the Addresses settings open.
+const forwardRules = new Map();
 const remoteLoaded = new Set();
 // Live mail searches on the server; results are cached per query for the selected mailbox.
 const searchCache = new Map();
@@ -107,18 +110,29 @@ function sidebarHTML() {
 function topbarHTML() {
   return `<header class="topbar">${buttons('menu', 'Open navigation', 'toggle-sidebar', 'class="mobile-menu"').replace('class="icon-button"', 'class="icon-button mobile-menu"').replace(' class="mobile-menu"', '')}<div class="breadcrumb"><strong>${esc(domainOf(state, state.selectedDomain).name)}</strong><span class="breadcrumb-address">${esc(activeAddress())}</span>${icon('right')}<span>${view.query ? 'Search' : folderNames[view.folder]}</span></div>
     <label class="search-field">${icon('search')}<span class="sr-only">Search current mailbox</span><input id="mail-search" type="search" autocomplete="off" placeholder="Search ${esc(activeAddress())}" value="${esc(view.query)}">${view.query ? `<button class="search-clear" data-action="clear-search" type="button" aria-label="Clear search">${icon('close')}</button>` : '<span class="shortcut" aria-hidden="true">/</span>'}</label>
-    ${liveMail ? '' : '<span class="preview-label"><span></span>Local prototype</span>'}${buttons('bell', 'Preview new-mail notification', 'preview-notification')}</header>`;
+    ${liveMail ? '' : '<span class="preview-label"><span></span>Local prototype</span>'}${liveMail ? buttons('bell', 'Notifications', 'open-notifications') : buttons('bell', 'Preview new-mail notification', 'preview-notification')}</header>`;
 }
-function filterHTML() {
+function selectAllHTML(groups) {
+  const checked = groups.filter(group => view.checked.includes(group.id)).length;
+  return groups.length ? `<label class="select-all" title="Select all"><input type="checkbox" id="check-all" data-action="check-all" aria-label="Select all ${groups.length} conversations" ${checked && checked === groups.length ? 'checked' : ''} data-partial="${checked > 0 && checked < groups.length}"></label>` : '';
+}
+function filterHTML(groups) {
   const active = view.source || view.environment;
-  return `<div class="list-filterbar"><button class="view-toggle${!view.unread ? ' active' : ''}" data-action="show-all" aria-pressed="${!view.unread}">All mail</button><button class="view-toggle${view.unread ? ' active' : ''}" data-action="show-unread" aria-pressed="${view.unread}">Unread</button>
+  return `<div class="list-filterbar">${selectAllHTML(groups)}<button class="view-toggle${!view.unread ? ' active' : ''}" data-action="show-all" aria-pressed="${!view.unread}">All mail</button><button class="view-toggle${view.unread ? ' active' : ''}" data-action="show-unread" aria-pressed="${view.unread}">Unread</button>
     <button class="filter-button${active ? ' active' : ''}" data-action="toggle-filters" aria-expanded="${view.filters}">${icon('filter')}Filters${active ? ' ·' : ''}</button>
     ${view.filters ? `<div class="filters-popover"><label>Source<select id="filter-source"><option value="">All sources</option><option value="manual" ${view.source === 'manual' ? 'selected' : ''}>People & manual mail</option><option value="automated" ${view.source === 'automated' ? 'selected' : ''}>Automated project mail</option></select></label><label>Environment<select id="filter-environment"><option value="">All environments</option><option value="production" ${view.environment === 'production' ? 'selected' : ''}>Production</option><option value="staging" ${view.environment === 'staging' ? 'selected' : ''}>Staging</option></select></label><button data-action="clear-filters">Clear filters</button></div>` : ''}</div>`;
+}
+// Bulk actions apply to whole conversations in this mailbox, like the reader toolbar does.
+function bulkHTML(groups) {
+  const folder = view.query ? '' : view.folder, count = view.checked.length;
+  const action = (name, title, act, extra = '') => buttons(name, title, act, extra);
+  return `<div class="list-filterbar bulk-bar" role="toolbar" aria-label="Selected conversations">${selectAllHTML(groups)}<strong class="bulk-count">${count} selected</strong><span class="bulk-actions">${action('read', 'Mark as read', 'bulk-read')}${action('mail', 'Mark as unread', 'bulk-unread')}${folder !== 'archive' ? action('archive', 'Archive', 'bulk-move', 'data-folder="archive"') : ''}${folder && folder !== 'inbox' ? action('inbox', 'Move to Inbox', 'bulk-move', 'data-folder="inbox"') : ''}${folder !== 'spam' ? action('spam', 'Move to Spam', 'bulk-move', 'data-folder="spam"') : ''}${folder === 'trash' ? action('trash', 'Delete permanently', 'bulk-delete') : action('trash', 'Move to Trash', 'bulk-move', 'data-folder="trash"')}${action('forward', 'Forward selected', 'bulk-forward', canCompose() ? '' : 'disabled')}${action('close', 'Clear selection', 'bulk-clear')}</span></div>`;
 }
 function rowHTML(group) {
   const message = group.latest, count = conversation(state, state.selectedDomain, group.id, activeAddress()).length;
   const own = message.from.endsWith(`@${state.selectedDomain}`), address = own ? `To: ${message.to.join(', ')}` : (message.to || []).filter(to => to.endsWith(`@${state.selectedDomain}`)).join(', ');
-  return `<button class="thread-row${view.selected === group.id ? ' selected' : ''}${group.unread ? ' unread' : ''}" data-action="open-thread" data-thread="${esc(group.id)}" aria-label="Open ${esc(message.subject)}" ${view.selected === group.id ? 'aria-current="true"' : ''}>${group.unread ? '<span class="unread-dot"></span>' : ''}<span class="row-head"><strong>${esc(own && message.source !== 'automated' ? 'You' : message.fromName)}</strong><time datetime="${message.date}">${timeShort(message.date)}</time></span><div class="row-subject">${esc(message.subject)}${count > 1 ? `<span class="thread-count">${count}</span>` : ''}</div><p class="row-snippet">${esc(message.text.replace(/\s+/g, ' '))}</p><div class="row-foot"><span class="row-alias">${esc(address)}</span>${tags(message)}${message.attachments?.length || message.hasAttachments ? icon('clip') : ''}</div></button>`;
+  const checked = view.checked.includes(group.id);
+  return `<div class="thread-item${checked ? ' checked' : ''}"><label class="row-check"><input type="checkbox" data-action="check-thread" data-thread="${esc(group.id)}" aria-label="Select ${esc(message.subject)}" ${checked ? 'checked' : ''}></label><button class="thread-row${view.selected === group.id ? ' selected' : ''}${group.unread ? ' unread' : ''}" data-action="open-thread" data-thread="${esc(group.id)}" aria-label="Open ${esc(message.subject)}" ${view.selected === group.id ? 'aria-current="true"' : ''}>${group.unread ? '<span class="unread-dot"></span>' : ''}<span class="row-head"><strong>${esc(own && message.source !== 'automated' ? 'You' : message.fromName)}</strong><time datetime="${message.date}">${timeShort(message.date)}</time></span><div class="row-subject">${esc(message.subject)}${count > 1 ? `<span class="thread-count">${count}</span>` : ''}</div><p class="row-snippet">${esc(message.text.replace(/\s+/g, ' '))}</p><div class="row-foot"><span class="row-alias">${esc(address)}</span>${tags(message)}${message.attachments?.length || message.hasAttachments ? icon('clip') : ''}</div></button></div>`;
 }
 function draftRowHTML(draft) { return `<button class="thread-row draft-row" data-action="resume-draft" data-id="${esc(draft.id)}" aria-label="Resume draft: ${esc(draft.subject || 'New message')}"><span class="row-head"><strong>${esc(draft.to || 'No recipient yet')}</strong><time>${timeShort(draft.updatedAt)}</time></span><div class="row-subject">${esc(draft.subject || 'New message')}</div><p class="row-snippet">${esc((draft.text || '').replace(/\s+/g, ' ') || 'Start writing…')}</p><div class="row-foot"><span>${esc(aliasesOf(state, draft.domain).find(alias => alias.id === draft.aliasId)?.address || 'Choose a sender')}</span><span class="tag">Draft</span></div></button>`; }
 function mailboxTabsHTML() {
@@ -127,9 +141,10 @@ function mailboxTabsHTML() {
 function listHTML() {
   const draftView = view.folder === 'drafts' && !view.query;
   const groups = threads(), drafts = mailboxDrafts().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  view.checked = view.checked.filter(id => groups.some(group => group.id === id));
   const count = draftView ? drafts.length : groups.length;
   const title = view.query ? 'Search results' : folderNames[view.folder];
-  return `<section class="message-list" aria-label="${esc(title)} message list">${mailboxTabsHTML()}<div class="list-heading"><div><h1>${title}</h1><p>${view.query ? `“${esc(view.query)}” · ` : ''}${count} ${draftView ? count === 1 ? 'draft' : 'drafts' : count === 1 ? 'conversation' : 'conversations'}${!draftView && view.folder === 'inbox' && !view.query ? ' · this address only' : ''}</p></div>${buttons('refresh', liveMail ? 'Check for new mail' : 'Refresh local preview', 'refresh')}</div>${draftView ? '' : filterHTML()}<div class="thread-list">${draftView ? drafts.map(draftRowHTML).join('') : groups.map(rowHTML).join('')}${!count ? `<div class="empty-list">${icon(view.query ? 'search' : folderIcons[view.folder])}<strong>${view.query ? 'No matching conversations' : draftView ? 'A little room for your next thought' : `Nothing in ${folderNames[view.folder]}`}</strong><p>${view.query ? 'Try another word or clear your filters.' : draftView ? 'Your unfinished messages will be kept here.' : view.folder === 'trash' ? 'Mail stays here until you delete it permanently.' : 'You’re all caught up here.'}</p>${view.query || view.alias || view.source || view.environment || view.unread ? '<button class="text-button" data-action="reset-view">Clear search & filters</button>' : ''}</div>` : ''}</div><div class="list-footer"><span>${liveMail ? 'Live mail' : draftView ? 'Drafts stay in this browser' : 'Sample mail · no live connection'}</span><span>${esc(activeAddress())}</span></div></section>`;
+  return `<section class="message-list" aria-label="${esc(title)} message list">${mailboxTabsHTML()}<div class="list-heading"><div><h1>${title}</h1><p>${view.query ? `“${esc(view.query)}” · ` : ''}${count} ${draftView ? count === 1 ? 'draft' : 'drafts' : count === 1 ? 'conversation' : 'conversations'}${!draftView && view.folder === 'inbox' && !view.query ? ' · this address only' : ''}</p></div>${buttons('refresh', liveMail ? 'Check for new mail' : 'Refresh local preview', 'refresh')}</div>${draftView ? '' : view.checked.length ? bulkHTML(groups) : filterHTML(groups)}<div class="thread-list">${draftView ? drafts.map(draftRowHTML).join('') : groups.map(rowHTML).join('')}${!count ? `<div class="empty-list">${icon(view.query ? 'search' : folderIcons[view.folder])}<strong>${view.query ? 'No matching conversations' : draftView ? 'A little room for your next thought' : `Nothing in ${folderNames[view.folder]}`}</strong><p>${view.query ? 'Try another word or clear your filters.' : draftView ? 'Your unfinished messages will be kept here.' : view.folder === 'trash' ? 'Mail stays here until you delete it permanently.' : 'You’re all caught up here.'}</p>${view.query || view.alias || view.source || view.environment || view.unread ? '<button class="text-button" data-action="reset-view">Clear search & filters</button>' : ''}</div>` : ''}</div><div class="list-footer"><span>${liveMail ? 'Live mail' : draftView ? 'Drafts stay in this browser' : 'Sample mail · no live connection'}</span><span>${esc(activeAddress())}</span></div></section>`;
 }
 function mailCardHTML(message, collapsed) {
   const sender = `<span class="sender-avatar">${esc(initials(message.fromName))}</span>`;
@@ -163,10 +178,11 @@ function render() {
   if (view.selected && !selectedGroup()) view.selected = null;
   document.documentElement.style.setProperty('--accent', domain.id === 'example.org' ? '#365f8c' : '#426859');
   root.innerHTML = `<div class="app-shell${view.selected ? ' has-selection' : ''}${view.mobileSidebar ? ' sidebar-open' : ''}"><button class="mobile-backdrop" data-action="close-sidebar" aria-label="Close navigation"></button>${sidebarHTML()}<main class="workspace">${topbarHTML()}<div class="mail-layout">${listHTML()}${readerHTML()}</div><button class="mobile-compose" data-action="compose" aria-label="Compose" ${canCompose() ? '' : 'disabled'}>${icon('plus')}Compose</button></main></div>`;
+  const all = root.querySelector('#check-all'); if (all) all.indeterminate = all.dataset.partial === 'true';
   mountFrames(); document.title = `${view.query ? 'Search' : folderNames[view.folder]} · ${activeAddress()}`;
 }
 
-function setFolder(folder) { searchCache.clear(); view = { ...view, folder, selected: null, query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, filters: false, more: false }; render(); }
+function setFolder(folder) { searchCache.clear(); view = { ...view, folder, selected: null, checked: [], query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, filters: false, more: false }; render(); }
 async function openThread(thread) {
   view.selected = thread; view.more = false;
   for (const message of state.messages.filter(message => message.domain === state.selectedDomain && message.thread === thread && inMailbox(message, activeAddress()))) setMailboxState(message, activeAddress(), { read: true });
@@ -179,12 +195,49 @@ async function openThread(thread) {
   }
   await commit();
 }
-async function moveCurrent(folder) {
-  const group = selectedGroup(); if (!group) return;
-  const ids = group.matching.map(message => message.id), before = group.matching.map(message => ({ id: message.id, folder: message.folder, previousFolder: message.previousFolder }));
+async function moveCurrent(folder) { const group = selectedGroup(); if (group) await moveGroups([group], folder); }
+async function moveGroups(groups, folder) {
+  const matching = groups.flatMap(group => group.matching);
+  const ids = matching.map(message => message.id), before = matching.map(message => ({ id: message.id, folder: message.folder, previousFolder: message.previousFolder }));
   const domain = state.selectedDomain, address = activeAddress();
-  moveMessages(state, domain, ids, folder, address); view.selected = null; view.more = false; render(); await commit();
-  toast(`Moved to ${folderNames[folder]}.`, { undo: async () => { for (const item of before) { const message = state.messages.find(message => message.id === item.id && message.domain === domain); if (message && !state.deleted.some(deleted => deleted.id === item.id && deleted.domain === domain && (!deleted.mailbox || deleted.mailbox === address))) setMailboxState(message, address, { folder: item.folder, previousFolder: item.previousFolder }); } render(); await commit(); } });
+  moveMessages(state, domain, ids, folder, address); view.selected = null; view.checked = []; view.more = false; render(); await commit();
+  toast(groups.length > 1 ? `Moved ${groups.length} conversations to ${folderNames[folder]}.` : `Moved to ${folderNames[folder]}.`, { undo: async () => { for (const item of before) { const message = state.messages.find(message => message.id === item.id && message.domain === domain); if (message && !state.deleted.some(deleted => deleted.id === item.id && deleted.domain === domain && (!deleted.mailbox || deleted.mailbox === address))) setMailboxState(message, address, { folder: item.folder, previousFolder: item.previousFolder }); } render(); await commit(); } });
+}
+function checkedGroups() { return threads().filter(group => view.checked.includes(group.id)); }
+async function markChecked(read) {
+  const groups = checkedGroups(), address = activeAddress(), domain = state.selectedDomain;
+  for (const group of groups) for (const item of conversation(state, domain, group.id, address)) setMailboxState(state.messages.find(message => message.id === item.id && message.domain === domain), address, { read });
+  view.checked = []; render(); await commit();
+  toast(`Marked ${groups.length === 1 ? 'conversation' : `${groups.length} conversations`} as ${read ? 'read' : 'unread'}.`);
+}
+function deleteChecked() {
+  const groups = checkedGroups(), ids = groups.flatMap(group => group.matching.map(item => item.id)), domain = state.selectedDomain, address = activeAddress();
+  if (!groups.length) return;
+  confirmAction(`Delete ${groups.length === 1 ? 'this conversation' : `${groups.length} conversations`} permanently?`, 'They will be removed from this mailbox. Copies delivered to another address stay there. The hosted app will retain private recovery copies for up to 30 days, while keeping deleted mail out of your inbox.', 'Delete permanently', async () => {
+    permanentlyDelete(state, domain, ids, new Date().toISOString(), address); view.checked = []; view.selected = null; render(); await commit({ reindex: true }); toast(liveMail ? 'Permanently deleted.' : 'Permanently removed from this local preview.');
+  });
+}
+// Forwards every message of the selected conversations in one new email, oldest first per conversation.
+async function forwardChecked() {
+  const groups = checkedGroups(), domain = state.selectedDomain, address = activeAddress();
+  if (!groups.length) return;
+  if (groups.length > 20) { toast('Forward up to 20 conversations at a time.', { error: true }); return; }
+  if (liveMail) for (const group of groups) if (conversation(state, domain, group.id, address).some(message => !message.loaded)) await loadConversation(state, domain, group.id, address);
+  const messages = groups.flatMap(group => conversation(state, domain, group.id, address));
+  view.checked = []; render(); openComposer({ mode: 'forward', forward: messages });
+}
+function forwardedHTML(message) {
+  return `<p>---------- Forwarded message ----------<br>From: ${esc(message.fromName)} &lt;${esc(message.from)}&gt;<br>Date: ${esc(timeFull(message.date))}<br>Subject: ${esc(message.subject)}<br>To: ${esc(message.to.join(', '))}</p>${message.html ? sanitizeHTML(message.html) : `<p>${esc(message.text).replace(/\n/g, '<br>')}</p>`}`;
+}
+// Attachments of forwarded messages, within the composer's file limits.
+function forwardFiles(messages) {
+  const files = [];
+  let total = 0, omitted = 0;
+  for (const file of messages.flatMap(message => message.attachments || []).filter(file => !file.inline)) {
+    if (files.length >= 10 || file.size > MAX_FILE_BYTES || total + file.size > MAX_TOTAL_BYTES) { omitted++; continue; }
+    files.push(structuredClone(file)); total += file.size;
+  }
+  return { files, omitted };
 }
 function confirmAction(title, copy, label, callback) {
   confirmCallback = callback;
@@ -196,7 +249,7 @@ function senderOptions(draft) {
   const alias = aliasesOf(state, draft.domain).find(alias => alias.id === draft.aliasId);
   return `<option value="${esc(alias?.id || '')}">${esc(alias?.name || '')} &lt;${esc(alias?.address || draft.mailbox)}&gt;${!alias?.enabled ? ' · disabled' : ''}</option>`;
 }
-function openComposer({ draftId, mode = 'new' } = {}) {
+function openComposer({ draftId, mode = 'new', forward } = {}) {
   if (composer) return;
   if (!canCompose()) { toast('This mailbox is read only. Select an enabled address to compose.', { error: true }); return; }
   const existing = state.drafts.find(draft => draft.id === draftId && draft.domain === state.selectedDomain && draft.aliasId === selectedMailbox(state)?.id);
@@ -212,7 +265,15 @@ function openComposer({ draftId, mode = 'new' } = {}) {
     body = `<p><br></p><p><br></p><blockquote><p>On ${esc(timeFull(message.date))}, ${esc(message.fromName)} wrote:</p>${message.html ? sanitizeHTML(message.html) : `<p>${esc(message.text).replace(/\n/g, '<br>')}</p>`}</blockquote>`;
     if (mode !== 'forward') { thread = message.thread; replyToId = message.id; }
   }
-  composer = existing ? { ...structuredClone(existing), mailbox: alias.address, dirty: false, rev: 0 } : { id: uid(), domain, mailbox: alias.address, aliasId: alias?.id || '', to, cc, bcc: '', subject, text: htmlText(body), html: body, thread, replyToId, attachments: mode === 'forward' && message ? structuredClone(message.attachments || []) : [], dirty: Boolean(mode !== 'new'), rev: 0 };
+  let forwarded;
+  if (forward?.length) {
+    const conversations = new Set(forward.map(item => item.thread)).size;
+    subject = conversations === 1 ? `Fwd: ${forward.at(-1).subject.replace(/^\s*fwd:\s*/i, '')}` : `Fwd: ${conversations} conversations`;
+    body = `<p><br></p><p><br></p>${forward.map(forwardedHTML).join('<p><br></p>')}`; to = ''; cc = ''; thread = undefined; replyToId = undefined;
+    forwarded = forwardFiles(forward);
+  }
+  composer = existing ? { ...structuredClone(existing), mailbox: alias.address, dirty: false, rev: 0 } : { id: uid(), domain, mailbox: alias.address, aliasId: alias?.id || '', to, cc, bcc: '', subject, text: htmlText(body), html: body, thread, replyToId, attachments: forwarded ? forwarded.files : mode === 'forward' && message ? structuredClone(message.attachments || []) : [], dirty: Boolean(mode !== 'new'), rev: 0 };
+  if (forwarded?.omitted) toast(`${forwarded.omitted} ${forwarded.omitted === 1 ? 'attachment was' : 'attachments were'} left out to stay within 10 files and 20 MB.`);
   const invalidSender = !aliasesOf(state, domain).some(item => item.id === composer.aliasId && item.enabled);
   composeDialog.innerHTML = `<div class="compose-content"><div class="dialog-header"><div><h2 id="compose-title">${existing ? 'Draft' : mode === 'forward' ? 'Forward message' : mode !== 'new' ? 'Reply' : 'New message'}<span class="tag">${esc(composer.mailbox)}</span></h2><p>Sending from ${esc(composer.mailbox)}${liveMail ? '' : ' · local preview'}</p></div>${buttons('close', 'Save and close draft', 'close-composer')}</div><div class="compose-fields"><div class="compose-field"><label for="compose-from">From</label><select id="compose-from" disabled title="Sender is fixed to this mailbox. Close this draft and switch mailboxes to use another address.">${senderOptions(composer)}</select></div><div class="compose-field"><label for="compose-to">To</label><input id="compose-to" type="text" inputmode="email" placeholder="Email addresses, separated by commas" value="${esc(composer.to)}" autocomplete="off"><button class="cc-toggle" data-action="toggle-cc" type="button">Cc / Bcc</button></div><div id="extra-recipients" ${composer.cc || composer.bcc ? '' : 'hidden'}><div class="compose-field"><label for="compose-cc">Cc</label><input id="compose-cc" type="text" inputmode="email" value="${esc(composer.cc)}" autocomplete="off"></div><div class="compose-field"><label for="compose-bcc">Bcc</label><input id="compose-bcc" type="text" inputmode="email" value="${esc(composer.bcc)}" autocomplete="off"></div></div><div class="compose-field"><label for="compose-subject" class="sr-only">Subject</label><input id="compose-subject" class="compose-subject" placeholder="Subject" spellcheck="true" lang="en" autocorrect="on" value="${esc(composer.subject)}" maxlength="998"></div></div><div class="compose-warning" id="sender-warning" ${invalidSender ? '' : 'hidden'}>This mailbox is disabled or unavailable. Sending is blocked.</div><div class="editor-tools" role="toolbar" aria-label="Message formatting"><button class="format-button" data-format="bold" title="Bold" aria-label="Bold"><b>B</b></button><button class="format-button" data-format="italic" title="Italic" aria-label="Italic"><i>I</i></button><button class="format-button" data-format="underline" title="Underline" aria-label="Underline"><u>U</u></button><span class="toolbar-separator"></span><button class="format-button" data-format="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">${icon('list')}</button><button class="format-button" data-format="formatBlock" title="Heading" aria-label="Heading">H₂</button><button class="format-button" data-action="show-link" title="Insert link" aria-label="Insert link">${icon('link')}</button><button class="format-button" data-action="insert-signature" title="Insert alias signature" aria-label="Insert alias signature">S̲</button></div><div class="link-entry" id="link-entry" hidden><label class="sr-only" for="link-url">Link URL</label><input id="link-url" type="url" placeholder="https://example.net"><button class="text-button" data-action="apply-link">Insert</button><button class="text-button" data-action="hide-link">Cancel</button></div><div id="message-editor" class="editor" contenteditable="true" role="textbox" aria-label="Message body" aria-multiline="true" data-placeholder="Write something thoughtful…" lang="en" spellcheck="true" autocorrect="on" autocapitalize="sentences">${sanitizeHTML(composer.html)}</div><div class="compose-attachments" id="compose-attachments"></div><p class="form-error" id="compose-error" role="alert" style="margin:0 21px" hidden></p><input type="file" id="attachment-input" multiple hidden><input type="file" id="inline-input" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden><div class="compose-footer"><button class="primary-button" data-action="send-local" title="${liveMail ? 'Send this email' : 'Save to the local Sent folder. No email is sent.'}">${icon('send')}${liveMail ? 'Send' : 'Send locally'}</button>${buttons('clip', 'Attach files', 'attach-files')}${buttons('image', 'Insert inline image', 'attach-inline')}<span class="save-status" id="draft-save-status">${liveMail ? existing ? 'Draft saved' : '' : existing ? 'Saved in this browser' : 'Draft stays in this browser'}</span>${buttons('trash', 'Discard draft', 'discard-draft')}</div></div>`;
   refreshComposeAttachments(); composeDialog.showModal();
@@ -296,18 +357,48 @@ async function submitLocal() {
     render(); toast('Saved to local Sent. No email was sent.');
   } catch (error) { errorArea.textContent = error.message; errorArea.hidden = false; button.disabled = false; }
 }
-function openSettings(tab = 'aliases') { settingsTab = tab; settingsDomain = state.selectedDomain; renderSettings(); settingsDialog.showModal(); }
+function openSettings(tab = 'aliases') { settingsTab = tab; settingsDomain = state.selectedDomain; renderSettings(); settingsDialog.showModal(); loadSettingsData(); }
 function renderSettings() {
   const domain = domainOf(state, settingsDomain || state.selectedDomain);
   let content;
-  if (settingsTab === 'aliases') content = `<div class="panel-heading"><h3>Addresses & identities</h3><label class="sr-only" for="settings-domain">Alias domain</label><select class="settings-domain-select" id="settings-domain">${state.domains.map(project => `<option value="${esc(project.id)}" ${project.id === domain.id ? 'selected' : ''}>${esc(project.id)}</option>`).join('')}</select></div><p class="panel-description">Each address has its own Inbox, Sent, Drafts, and folders. Compose and reply always use that mailbox’s address.</p>${domain.aliases.map(alias => `<div class="alias-card${alias.enabled ? '' : ' disabled'}"><span class="alias-icon">${icon('mail')}</span><div><strong>${esc(alias.address)}</strong><p>${esc(alias.name)}${alias.default && alias.enabled ? ' <span class="tag">Default sender</span>' : ''}${!alias.enabled ? alias.captured ? ' <span class="tag">Captured mail · read only</span>' : ' <span class="tag">Disabled</span>' : ''}</p></div><button class="text-button" data-action="edit-alias" data-id="${esc(alias.id)}">Edit</button><button class="text-button${alias.enabled ? '' : ' danger'}" data-action="toggle-alias" data-id="${esc(alias.id)}">${alias.enabled ? 'Disable' : 'Enable'}</button></div>`).join('')}<button class="secondary-button" data-action="add-alias">${icon('plus')}Add address</button><div class="info-box"><strong>Your mail keeps its original identity.</strong>Disabling or renaming an address keeps existing messages and drafts. These settings change only this local preview.</div>`;
-  if (settingsTab === 'notifications') content = `<div class="panel-heading"><h3>A heads-up, wherever you are.</h3></div><p class="panel-description">Sender and subject on your lock screen. The message itself stays in your inbox.</p><label class="setting-row"><span><strong>New-mail notifications</strong><p>Remember this preference for the hosted app.</p></span><input class="switch" type="checkbox" id="notification-toggle" ${state.preferences.notifications ? 'checked' : ''}></label><div class="notification-preview"><div class="notification-card">${icon('mail')}<div><small>Inbox · ${esc(domain.id)}</small><strong>${domain.id === 'example.com' ? 'Alex Morgan' : 'Morgan Ellis'}</strong><p>${domain.id === 'example.com' ? 'A conversation about the next workshop' : 'A question about inviting our team'}</p></div></div></div><button class="secondary-button" data-action="preview-notification">${icon('bell')}Preview notification</button><div class="info-box">On iPhone, the hosted app will be added to your Home Screen. Background delivery will be connected later; this local preview doesn’t request notification permission.</div>`;
+  if (settingsTab === 'aliases') content = `<div class="panel-heading"><h3>Addresses & identities</h3><label class="sr-only" for="settings-domain">Alias domain</label><select class="settings-domain-select" id="settings-domain">${state.domains.map(project => `<option value="${esc(project.id)}" ${project.id === domain.id ? 'selected' : ''}>${esc(project.id)}</option>`).join('')}</select></div><p class="panel-description">Each address has its own Inbox, Sent, Drafts, and folders. Compose and reply always use that mailbox’s address.</p>${domain.aliases.map(alias => `<div class="alias-card${alias.enabled ? '' : ' disabled'}"><span class="alias-icon">${icon('mail')}</span><div><strong>${esc(alias.address)}</strong><p>${esc(alias.name)}${alias.default && alias.enabled ? ' <span class="tag">Default sender</span>' : ''}${!alias.enabled ? alias.captured ? ' <span class="tag">Captured mail · read only</span>' : ' <span class="tag">Disabled</span>' : ''}</p>${liveMail && alias.receiveEnabled ? `<p class="forward-summary">${!forwardRules.has(alias.address) ? 'Checking forwarding…' : forwardRules.get(alias.address).length ? `Forwards new mail to ${esc(forwardRules.get(alias.address).join(', '))}` : 'Not forwarded'}</p>` : ''}</div>${liveMail ? alias.receiveEnabled ? `<button class="text-button" data-action="edit-forwarding" data-address="${esc(alias.address)}">Forwarding</button>` : '' : `<button class="text-button" data-action="edit-alias" data-id="${esc(alias.id)}">Edit</button><button class="text-button${alias.enabled ? '' : ' danger'}" data-action="toggle-alias" data-id="${esc(alias.id)}">${alias.enabled ? 'Disable' : 'Enable'}</button>`}</div>`).join('')}${liveMail ? '<div class="info-box"><strong>Your mail keeps its original identity.</strong>Addresses are managed in the mail setup. Forwarding sends a copy of each new Inbox message from the receiving address; Spam is never forwarded.</div>' : `<button class="secondary-button" data-action="add-alias">${icon('plus')}Add address</button><div class="info-box"><strong>Your mail keeps its original identity.</strong>Disabling or renaming an address keeps existing messages and drafts. These settings change only this local preview.</div>`}`;
+  if (settingsTab === 'notifications' && liveMail) content = pushSettingsHTML();
+  else if (settingsTab === 'notifications') content = `<div class="panel-heading"><h3>A heads-up, wherever you are.</h3></div><p class="panel-description">Sender and subject on your lock screen. The message itself stays in your inbox.</p><label class="setting-row"><span><strong>New-mail notifications</strong><p>Remember this preference for the hosted app.</p></span><input class="switch" type="checkbox" id="notification-toggle" ${state.preferences.notifications ? 'checked' : ''}></label><div class="notification-preview"><div class="notification-card">${icon('mail')}<div><small>Inbox · ${esc(domain.id)}</small><strong>${domain.id === 'example.com' ? 'Alex Morgan' : 'Morgan Ellis'}</strong><p>${domain.id === 'example.com' ? 'A conversation about the next workshop' : 'A question about inviting our team'}</p></div></div></div><button class="secondary-button" data-action="preview-notification">${icon('bell')}Preview notification</button><div class="info-box">On iPhone, the hosted app will be added to your Home Screen. Background delivery will be connected later; this local preview doesn’t request notification permission.</div>`;
   if (settingsTab === 'storage') {
     const localMessages = state.messages.filter(message => message.status === 'local').length, files = [...state.messages, ...state.drafts].flatMap(item => item.attachments || []), bytes = files.reduce((sum, file) => sum + file.size, 0);
     content = `<div class="panel-heading"><h3>Keep what matters.</h3></div><p class="panel-description">Mail stays in every folder until you decide to delete it permanently. Trash never empties itself.</p><div class="storage-stat">${state.messages.length} <small>local messages · ${localMessages} composed here</small></div><div class="storage-meter"><span></span></div><label class="setting-row"><span><strong>Mail and Trash</strong><p>No automatic expiry</p></span><span class="tag">Keep until deleted</span></label><div class="setting-row"><span><strong>Private recovery window</strong><p>30 days after permanent deletion in the hosted app</p></span></div><div class="setting-row"><span><strong>Attachments in this preview</strong><p>${files.length} files · ${prettySize(bytes)}</p></span></div><div class="info-box">Local data is saved in this browser, not synced between devices. This preview does not create cloud backups or connect to your real inbox.</div>`;
   }
   if (settingsTab === 'preview') content = `<div class="panel-heading"><h3>Your preview workspace.</h3></div><p class="panel-description">Try the full flow with fictional messages. Sending saves a message to local Sent; it doesn’t deliver an email.</p><div class="setting-row"><span><strong>Owner account</strong><p>owner@example.net · Google sign-in will be connected later</p></span></div><div class="setting-row"><span><strong>Sample incoming mail</strong><p>Add a fictional message to ${esc(domain.id === state.selectedDomain ? activeAddress() : defaultAlias(state, domain.id)?.address || domain.id)}.</p></span><button class="secondary-button" data-action="sample-incoming">Add sample</button></div><label class="setting-row"><span><strong>Load external email images</strong><p>Off by default. You can also load them per message.</p></span><input class="switch" type="checkbox" id="external-images-toggle" ${state.preferences.externalImages ? 'checked' : ''}></label><div class="info-box">Keyboard shortcuts: C to compose, / to search, and ⌘/Ctrl + Enter to send locally. Close a message draft to save it for later.</div><button class="text-button danger" style="margin-top:22px" data-action="reset-preview">Reset local sample data</button>`;
-  settingsDialog.innerHTML = `<div class="dialog-header"><div><h2 id="settings-title">Aliases & settings</h2><p>Your project mail, your preferences.</p></div>${buttons('close', 'Close settings', 'close-settings')}</div><div class="settings-layout"><nav class="settings-tabs" aria-label="Settings sections">${[['aliases','mail','Addresses'],['notifications','bell','Notifications'],['storage','storage','Storage'],['preview','settings','Local preview']].map(([id, symbol, label]) => `<button class="settings-tab${settingsTab === id ? ' active' : ''}" data-action="settings-tab" data-tab="${id}" ${settingsTab === id ? 'aria-current="page"' : ''}>${icon(symbol)}${label}</button>`).join('')}</nav><section class="settings-panel">${content}</section></div>`;
+  const tabs = [['aliases','mail','Addresses'],['notifications','bell','Notifications'],['storage','storage','Storage'],...(liveMail ? [] : [['preview','settings','Local preview']])];
+  settingsDialog.innerHTML = `<div class="dialog-header"><div><h2 id="settings-title">Aliases & settings</h2><p>Your project mail, your preferences.</p></div>${buttons('close', 'Close settings', 'close-settings')}</div><div class="settings-layout"><nav class="settings-tabs" aria-label="Settings sections">${tabs.map(([id, symbol, label]) => `<button class="settings-tab${settingsTab === id ? ' active' : ''}" data-action="settings-tab" data-tab="${id}" ${settingsTab === id ? 'aria-current="page"' : ''}>${icon(symbol)}${label}</button>`).join('')}</nav><section class="settings-panel">${content}</section></div>`;
+}
+function pushSettingsHTML() {
+  const status = pushStatus || { loading: true };
+  const intro = '<div class="panel-heading"><h3>A heads-up, wherever you are.</h3></div><p class="panel-description">New Inbox mail shows its sender and subject on your devices, even when Inbox is closed. The message itself stays here, and Spam never notifies.</p>';
+  if (status.loading) return `${intro}<p class="panel-description">Checking this device…</p>`;
+  if (status.error) return `${intro}<div class="info-box">${esc(status.error)}</div>`;
+  const here = notifications.needsHomeScreen() ? '<div class="info-box"><strong>Add Inbox to your Home Screen first.</strong>In Safari, tap Share, then Add to Home Screen. Open Inbox from its Home Screen icon and turn notifications on there.</div>'
+    : !status.supported ? '<div class="info-box">This browser can’t show notifications.</div>'
+    : `<div class="setting-row"><span><strong>This device</strong><p>${status.enrolled ? 'Notifications are on.' : status.permission === 'denied' ? 'Notifications are blocked in this browser’s settings.' : 'Notifications are off.'}</p></span>${status.enrolled ? '<button class="secondary-button" data-action="push-disable">Turn off</button>' : `<button class="primary-button" data-action="push-enable" ${status.permission === 'denied' ? 'disabled' : ''}>${icon('bell')}Turn on</button>`}</div>`;
+  const devices = status.devices.map(device => `<div class="setting-row"><span><strong>${esc(device.label)}${status.enrolled && device.id === status.device ? ' <span class="tag">This device</span>' : ''}</strong><p>Added ${esc(timeShort(device.createdAt))}${device.lastSuccessAt ? ` · last notified ${esc(timeShort(device.lastSuccessAt))}` : ''}</p></span><button class="text-button danger" data-action="push-remove" data-id="${esc(device.id)}">Remove</button></div>`).join('');
+  return `${intro}${here}<h4 class="settings-subheading">Devices that get notifications</h4>${devices || '<p class="panel-description">No devices yet.</p>'}${status.devices.length ? `<button class="secondary-button settings-action" data-action="push-test">${icon('bell')}Send a test notification</button>` : ''}`;
+}
+async function loadPushStatus() {
+  pushStatus = { loading: true }; renderSettings();
+  try { pushStatus = await notifications.status(); } catch (error) { pushStatus = { error: error.message }; }
+  if (settingsDialog.open && settingsTab === 'notifications') renderSettings();
+}
+async function loadForwardRules() {
+  const domain = settingsDomain;
+  try { for (const alias of aliasesOf(state, domain).filter(item => item.receiveEnabled)) forwardRules.set(alias.address, (await forwarding.rules(alias.address)).targets); }
+  catch (error) { toast(error.message, { error: true }); }
+  if (settingsDialog.open && settingsTab === 'aliases' && settingsDomain === domain) renderSettings();
+}
+function loadSettingsData() { if (!liveMail) return; if (settingsTab === 'notifications') void loadPushStatus(); if (settingsTab === 'aliases') void loadForwardRules(); }
+function editForwarding(address) {
+  const targets = forwardRules.get(address) || [];
+  aliasDialog.innerHTML = `<form id="forward-form" data-address="${esc(address)}"><div class="dialog-header"><h2 id="alias-title">Forward new mail</h2>${buttons('close', 'Cancel forwarding edit', 'cancel-alias')}</div><div class="dialog-body"><p class="confirm-copy">New mail that arrives in the Inbox of ${esc(address)} is also sent to these addresses. Spam isn’t forwarded.</p><label class="form-field">Forward to<textarea name="targets" rows="3" placeholder="you@example.net" autocomplete="off" spellcheck="false">${esc(targets.join('\n'))}</textarea></label><p class="panel-description">Up to three addresses, one per line. Leave empty to stop forwarding. Copies come from ${esc(address)}, and replies go to the original sender.</p><p class="form-error" id="forward-error" role="alert" hidden></p></div><div class="dialog-actions"><button type="button" class="secondary-button" data-action="cancel-alias">Cancel</button><button class="primary-button" type="submit">Save forwarding</button></div></form>`;
+  aliasDialog.showModal(); aliasDialog.querySelector('[name="targets"]').focus();
 }
 function editAlias(id) {
   const alias = aliasesOf(state, settingsDomain).find(item => item.id === id);
@@ -377,7 +468,7 @@ document.addEventListener('click', async event => {
       case 'discard-draft': confirmAction('Discard this draft?', 'The draft and its local attachments will be removed from this browser.', 'Discard draft', async () => { clearTimeout(draftTimer); const draftId = composer.id; composer = null; composeDialog.close(); state.drafts = state.drafts.filter(draft => draft.id !== draftId); await commit(); render(); toast('Draft discarded.'); }); break;
       case 'settings': openSettings(); break;
       case 'close-settings': settingsDialog.close(); render(); break;
-      case 'settings-tab': settingsTab = tab; renderSettings(); break;
+      case 'settings-tab': settingsTab = tab; renderSettings(); loadSettingsData(); break;
       case 'add-alias': case 'edit-alias': case 'toggle-alias': case 'sample-incoming': case 'reset-preview': if (liveMail) { toast(action.endsWith('alias') ? 'Addresses are managed in the mail setup for now.' : 'Sample tools are not available with live mail.'); break; }
         if (action === 'add-alias') { editAlias(); break; }
         if (action === 'edit-alias') { editAlias(id); break; }
@@ -386,6 +477,28 @@ document.addEventListener('click', async event => {
         confirmAction('Reset this local preview?', 'This removes messages you composed here, drafts, attachment files, alias edits, and local preferences. Fictional sample mail will be restored. Your real mail is not connected.', 'Reset preview', async () => { state = seedState(); if (sharedStorage) { const threads = new Map(); for (const message of state.messages) { if (!threads.has(message.thread)) threads.set(message.thread, uid()); message.id = uid(); message.thread = threads.get(message.thread); } } view = { folder: 'inbox', selected: null, query: '', alias: '', source: '', environment: '', unread: false }; settingsDomain = state.selectedDomain; await commit({ reindex: true }); settingsDialog.close(); render(); toast('Local sample workspace restored.'); }); break;
       case 'cancel-alias': aliasDialog.close(); break;
       case 'preview-notification': previewNotification(); break;
+      case 'open-notifications': openSettings('notifications'); break;
+      case 'push-enable': case 'push-disable': case 'push-remove': case 'push-test': {
+        element.disabled = true;
+        try {
+          if (action === 'push-test') { const result = await notifications.test(); toast(result.sent ? `Test sent to ${result.sent} ${result.sent === 1 ? 'device' : 'devices'}.` : 'No device accepted the test notification.', { error: !result.sent }); }
+          else { if (action === 'push-enable') await notifications.enable(); if (action === 'push-disable') await notifications.disable(); if (action === 'push-remove') await notifications.remove(id); toast(action === 'push-enable' ? 'Notifications are on for this device.' : action === 'push-disable' ? 'Notifications are off for this device.' : 'Device removed.'); }
+        } finally { await loadPushStatus(); }
+        break;
+      }
+      case 'edit-forwarding': editForwarding(element.dataset.address); break;
+      case 'check-thread': {
+        const list = threads().map(group => group.id), position = list.indexOf(thread), previous = list.indexOf(lastChecked);
+        const range = event.shiftKey && previous >= 0 && position >= 0 ? list.slice(Math.min(previous, position), Math.max(previous, position) + 1) : [thread];
+        view.checked = element.checked ? [...new Set([...view.checked, ...range])] : view.checked.filter(item => !range.includes(item));
+        lastChecked = thread; render(); root.querySelector(`[data-action="check-thread"][data-thread="${CSS.escape(thread)}"]`)?.focus(); break;
+      }
+      case 'check-all': view.checked = element.checked ? threads().map(group => group.id) : []; render(); root.querySelector('#check-all')?.focus(); break;
+      case 'bulk-clear': view.checked = []; render(); break;
+      case 'bulk-read': case 'bulk-unread': await markChecked(action === 'bulk-read'); break;
+      case 'bulk-move': await moveGroups(checkedGroups(), folder); break;
+      case 'bulk-delete': deleteChecked(); break;
+      case 'bulk-forward': await forwardChecked(); break;
       case 'cancel-confirm': confirmCallback = null; confirmDialog.close(); break;
       case 'confirm': { const callback = confirmCallback; confirmCallback = null; element.disabled = true; if (callback) await callback(); confirmDialog.close(); break; }
     }
@@ -404,7 +517,7 @@ document.addEventListener('change', async event => {
 
     if (target.id === 'filter-source') { view.source = target.value; view.selected = null; render(); }
     if (target.id === 'filter-environment') { view.environment = target.value; view.selected = null; render(); }
-    if (target.id === 'settings-domain') { settingsDomain = target.value; renderSettings(); }
+    if (target.id === 'settings-domain') { settingsDomain = target.value; renderSettings(); loadSettingsData(); }
     if (target.id === 'notification-toggle') { state.preferences.notifications = target.checked; await commit(); }
     if (target.id === 'external-images-toggle') { state.preferences.externalImages = target.checked; await commit(); render(); }
     if (target.id === 'compose-from') { composer.aliasId = target.value; document.querySelector('#sender-warning').hidden = aliasesOf(state, composer.domain).some(alias => alias.id === target.value && alias.enabled); scheduleDraftSave(); }
@@ -412,6 +525,15 @@ document.addEventListener('change', async event => {
   } catch (error) { toast(error.message || 'Files could not be added.', { error: true }); }
 });
 document.addEventListener('submit', async event => {
+  if (event.target.matches('form#forward-form')) {
+    event.preventDefault();
+    const address = event.target.dataset.address, errorArea = document.querySelector('#forward-error'), button = event.target.querySelector('[type="submit"]');
+    const targets = new FormData(event.target).get('targets').split(/[\s,;]+/).filter(Boolean);
+    button.disabled = true;
+    try { const saved = await forwarding.save(address, targets); forwardRules.set(address, saved.targets); aliasDialog.close(); renderSettings(); toast(saved.targets.length ? `New mail to ${address} is forwarded.` : `Forwarding is off for ${address}.`); }
+    catch (error) { errorArea.textContent = error.message; errorArea.hidden = false; button.disabled = false; }
+    return;
+  }
   if (!event.target.matches('form#alias-form')) return;
   event.preventDefault(); const form = new FormData(event.target), errorArea = document.querySelector('#alias-error');
   if (liveMail) { errorArea.textContent = 'Addresses are managed in the mail setup for now.'; errorArea.hidden = false; return; }
@@ -458,6 +580,17 @@ window.addEventListener('pagehide', () => { if (composer?.dirty) { captureDraft(
 
 window.addEventListener('inbox:storage-error', event => showStorageError(event.detail));
 window.addEventListener('inbox:discard-unsaved', () => { if (composer) composer.dirty = false; });
+// /?domain=…&mailbox=…&thread=… (from a notification) opens that conversation in its folder.
+async function openLink(url, { reload = false } = {}) {
+  const params = new URL(url, location.origin).searchParams, domain = params.get('domain'), address = params.get('mailbox'), thread = params.get('thread');
+  if (!domain || !domainOf(state, domain)) return;
+  if (reload && liveMail && !composer && !state.messages.some(message => message.domain === domain && message.thread === thread)) { const fresh = await loadState(); fresh.selectedDomain = state.selectedDomain; fresh.selectedMailboxes = state.selectedMailboxes; state = fresh; searchCache.clear(); updateIndex(); }
+  state.selectedDomain = domain; state.selectedMailboxes ||= {};
+  if (mailboxesOf(state, domain).some(alias => alias.address === address)) state.selectedMailboxes[domain] = address;
+  const message = state.messages.find(item => item.domain === domain && item.thread === thread && inMailbox(item, activeAddress()));
+  setFolder(message ? mailboxEntries(message)[activeAddress()].folder : 'inbox');
+  if (message) await openThread(thread); else await commit();
+}
 async function start() {
   try { state = await loadState(); if (!state || state.schema !== 1) { state = seedState(); await persistState(state); } }
   catch (error) {
@@ -465,5 +598,10 @@ async function start() {
     state = seedState(); showStorageError(new Error(`${error.message} This preview is running without saved changes.`));
   }
   updateIndex(); settingsDomain = state.selectedDomain; render();
+  if (liveMail && notifications.supported()) {
+    notifications.register().catch(() => {});
+    navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type === 'inbox:open') openLink(event.data.url, { reload: true }).catch(error => toast(error.message, { error: true })); });
+  }
+  if (new URLSearchParams(location.search).has('thread')) { await openLink(location.href); history.replaceState(null, '', '/'); }
 }
 await start();

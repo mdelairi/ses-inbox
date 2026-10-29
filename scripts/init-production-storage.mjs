@@ -17,9 +17,11 @@ for (const arn of [app.AppRoleArn, app.WorkerRoleArn]) if (!arn.startsWith(`arn:
 const GRANTS = {
   // DELETE on content tables is for purging a message after its last alias deletes it.
   inbox_mail: { role: app.AppRoleArn, tables: { domains: 'SELECT', aliases: 'SELECT', messages: 'SELECT, INSERT, UPDATE, DELETE', message_ids: 'SELECT, INSERT, DELETE', mailbox_entries: 'SELECT, INSERT, UPDATE, DELETE',
-    search_positions: 'SELECT, INSERT, DELETE', drafts: 'SELECT, INSERT, UPDATE, DELETE', deletion_tombstones: 'SELECT, INSERT', ingestion_receipts: 'SELECT', purge_jobs: 'SELECT, INSERT, UPDATE', send_attempts: 'SELECT, INSERT, UPDATE, DELETE' } },
+    search_positions: 'SELECT, INSERT, DELETE', drafts: 'SELECT, INSERT, UPDATE, DELETE', deletion_tombstones: 'SELECT, INSERT', ingestion_receipts: 'SELECT', purge_jobs: 'SELECT, INSERT, UPDATE', send_attempts: 'SELECT, INSERT, UPDATE, DELETE',
+    forward_rules: 'SELECT, INSERT, DELETE', forward_attempts: 'SELECT', push_subscriptions: 'SELECT, INSERT, UPDATE, DELETE' } },
   inbox_worker: { role: app.WorkerRoleArn, tables: { domains: 'SELECT', aliases: 'SELECT', messages: 'SELECT, INSERT, UPDATE', message_ids: 'SELECT, INSERT', mailbox_entries: 'SELECT, INSERT',
-    search_positions: 'SELECT, INSERT', purge_jobs: 'SELECT', deletion_tombstones: 'SELECT', ingestion_receipts: 'SELECT, INSERT, UPDATE', send_attempts: 'SELECT, UPDATE' } },
+    search_positions: 'SELECT, INSERT', purge_jobs: 'SELECT', deletion_tombstones: 'SELECT', ingestion_receipts: 'SELECT, INSERT, UPDATE', send_attempts: 'SELECT, UPDATE',
+    forward_rules: 'SELECT', forward_attempts: 'SELECT, INSERT, UPDATE', push_subscriptions: 'SELECT, UPDATE, DELETE' } },
 };
 
 if (process.argv.includes('--recovery')) {
