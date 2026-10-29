@@ -188,3 +188,11 @@ input::placeholder, textarea::placeholder { color: #858c91; }
   .row-check input, .select-all input { width: 20px; height: 20px; }
   .row-check { padding-top: 19px; }
 }
+
+/* Phones: the side menu covers the bottom bars, scrolls, and has no gap before settings. */
+@media (max-width: 650px) {
+  .sidebar-open .sidebar { z-index: 45; }
+  .sidebar-open .reader-actions, .sidebar-open .bulk-actions { display: none; }
+  .sidebar { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+  .sidebar-spacer { flex: none; min-height: 0; height: 18px; }
+}

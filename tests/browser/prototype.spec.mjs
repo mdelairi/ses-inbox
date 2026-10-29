@@ -170,3 +170,27 @@ test('the top-bar inbox picker switches across domains in two taps', async ({ pa
   expect(await page.locator('.reader-actions').evaluate(bar => bar.getBoundingClientRect().bottom)).toBeLessThanOrEqual(844);
   await expect(page.locator('.mailbox-note')).toHaveCount(0);
 });
+
+test('Restore returns sent mail to Sent and received mail to Inbox; the phone side menu clears the bottom bar', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('#mail-search')).toHaveAttribute('placeholder', 'Search');
+  await page.getByRole('button', { name: /^Switch inbox:/ }).click();
+  await page.getByRole('menuitem', { name: /^no-reply@exampleorg\.com/ }).click();
+  await expect(page.getByRole('heading', { name: 'Sent', exact: true })).toBeVisible();
+  const row = page.locator('.thread-item').first(), subject = (await row.locator('.row-subject').textContent()).trim();
+  await row.locator('.row-check input').check();
+  await expect(page.getByRole('button', { name: 'Restore to Inbox or Sent' })).toHaveCount(0); // sent mail is already home
+  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await page.getByRole('button', { name: 'Open navigation' }).click(); await page.getByRole('button', { name: /^Archive/ }).click();
+  await page.locator('.thread-item').filter({ hasText: subject }).locator('.row-check input').check();
+  await page.getByRole('button', { name: 'Restore to Inbox or Sent' }).click();
+  await expect(page.locator('.toast').filter({ hasText: 'Restored.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Open navigation' }).click(); await page.getByRole('button', { name: /^Sent/ }).click();
+  await expect(page.locator('.thread-item').filter({ hasText: subject })).toHaveCount(1);
+
+  await page.locator('.thread-row').first().click();
+  await expect(page.locator('.reader-actions')).toBeVisible();
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  await expect(page.locator('.reader-actions')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Aliases & settings' })).toBeInViewport();
+});

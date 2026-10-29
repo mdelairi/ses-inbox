@@ -111,7 +111,7 @@ function sidebarHTML() {
 }
 function topbarHTML() {
   return `<header class="topbar">${buttons('menu', 'Open navigation', 'toggle-sidebar', 'class="mobile-menu"').replace('class="icon-button"', 'class="icon-button mobile-menu"').replace(' class="mobile-menu"', '')}<div class="mailbox-picker"><button class="mailbox-switch" data-action="toggle-mailbox-menu" aria-haspopup="true" aria-expanded="${view.mailboxMenu}" aria-label="Switch inbox: ${esc(activeAddress())}"><span class="mailbox-switch-text"><strong>${esc(domainOf(state, state.selectedDomain).name)}</strong><span class="breadcrumb-address">${esc(activeAddress())}</span></span><span class="picker-chevron">${icon('chevron')}</span></button><span class="breadcrumb-folder">${icon('right')}<span>${view.query ? 'Search' : folderNames[view.folder]}</span></span>${view.mailboxMenu ? mailboxMenuHTML() : ''}</div>
-    <label class="search-field">${icon('search')}<span class="sr-only">Search current mailbox</span><input id="mail-search" type="search" autocomplete="off" placeholder="Search ${esc(activeAddress())}" value="${esc(view.query)}">${view.query ? `<button class="search-clear" data-action="clear-search" type="button" aria-label="Clear search">${icon('close')}</button>` : '<span class="shortcut" aria-hidden="true">/</span>'}</label>
+    <label class="search-field">${icon('search')}<span class="sr-only">Search current mailbox</span><input id="mail-search" type="search" autocomplete="off" placeholder="${matchMedia('(max-width: 650px)').matches ? 'Search' : `Search ${esc(activeAddress())}`}" value="${esc(view.query)}">${view.query ? `<button class="search-clear" data-action="clear-search" type="button" aria-label="Clear search">${icon('close')}</button>` : '<span class="shortcut" aria-hidden="true">/</span>'}</label>
     ${liveMail ? '' : '<span class="preview-label"><span></span>Local prototype</span>'}${liveMail ? buttons('bell', 'Notifications', 'open-notifications') : buttons('bell', 'Preview new-mail notification', 'preview-notification')}</header>`;
 }
 function selectAllHTML(groups) {
@@ -135,7 +135,7 @@ function filterHTML(groups) {
 // Bulk actions apply to whole conversations in this mailbox, like the reader toolbar does.
 function bulkHTML(groups) {
   const folder = view.query ? '' : view.folder, count = view.checked.length;
-  return `<div class="list-filterbar bulk-bar" role="toolbar" aria-label="Selected conversations">${selectAllHTML(groups)}<strong class="bulk-count">${count} selected</strong><span class="bulk-actions">${barButton('read', 'Read', 'Mark as read', 'bulk-read')}${barButton('mail', 'Unread', 'Mark as unread', 'bulk-unread')}${folder !== 'archive' ? barButton('archive', 'Archive', 'Archive', 'bulk-move', 'data-folder="archive"') : ''}${folder && folder !== 'inbox' ? barButton('inbox', 'Inbox', 'Move to Inbox', 'bulk-move', 'data-folder="inbox"') : ''}${folder !== 'spam' ? barButton('spam', 'Spam', 'Move to Spam', 'bulk-move', 'data-folder="spam"') : ''}${folder === 'trash' ? barButton('trash', 'Delete', 'Delete permanently', 'bulk-delete') : barButton('trash', 'Trash', 'Move to Trash', 'bulk-move', 'data-folder="trash"')}${barButton('forward', 'Forward', 'Forward selected', 'bulk-forward', canCompose() ? '' : 'disabled')}</span>${buttons('close', 'Clear selection', 'bulk-clear')}</div>`;
+  return `<div class="list-filterbar bulk-bar" role="toolbar" aria-label="Selected conversations">${selectAllHTML(groups)}<strong class="bulk-count">${count} selected</strong><span class="bulk-actions">${barButton('read', 'Read', 'Mark as read', 'bulk-read')}${barButton('mail', 'Unread', 'Mark as unread', 'bulk-unread')}${folder !== 'archive' ? barButton('archive', 'Archive', 'Archive', 'bulk-move', 'data-folder="archive"') : ''}${misplaced(checkedGroups(), activeAddress()) ? barButton('inbox', 'Restore', 'Restore to Inbox or Sent', 'bulk-move', 'data-folder="restore"') : ''}${folder !== 'spam' ? barButton('spam', 'Spam', 'Move to Spam', 'bulk-move', 'data-folder="spam"') : ''}${folder === 'trash' ? barButton('trash', 'Delete', 'Delete permanently', 'bulk-delete') : barButton('trash', 'Trash', 'Move to Trash', 'bulk-move', 'data-folder="trash"')}${barButton('forward', 'Forward', 'Forward selected', 'bulk-forward', canCompose() ? '' : 'disabled')}</span>${buttons('close', 'Clear selection', 'bulk-clear')}</div>`;
 }
 function rowHTML(group) {
   const message = group.latest, count = conversation(state, state.selectedDomain, group.id, activeAddress()).length;
@@ -169,9 +169,9 @@ function readerHTML() {
   const trash = matches.every(item => item.folder === 'trash');
   return `<section class="reader" aria-label="Reading pane"><div class="reader-toolbar">${buttons('left', 'Back to message list', 'back', 'data-back="true"').replace('class="icon-button"', 'class="icon-button back-button"')}<div class="reader-actions">${barButton('archive', 'Archive', 'Archive conversation', 'archive')}${barButton('trash', trash ? 'Delete' : 'Trash', trash ? 'Delete permanently' : 'Move conversation to Trash', trash ? 'delete-permanently' : 'trash')}${barButton('mail', 'Unread', 'Mark conversation unread', 'mark-unread')}<span class="toolbar-separator"></span>${barButton('reply', 'Reply', 'Reply', 'reply', `data-bar-only ${canCompose() ? '' : 'disabled'}`)}${barButton('forward', 'Forward', 'Forward', 'forward', `data-bar-only ${canCompose() ? '' : 'disabled'}`)}${barButton('more', 'More', 'More message actions', 'toggle-more')}</div>
     <div class="right-actions"><span class="message-position">${position + 1} of ${threads().length}</span>${buttons('left', 'Previous conversation', 'previous', position === 0 ? 'disabled' : '')}${buttons('right', 'Next conversation', 'next', position === threads().length - 1 ? 'disabled' : '')}</div></div>
-    ${view.more ? `<div class="popover-menu">${matches.some(item => ['trash', 'spam', 'archive'].includes(item.folder)) ? `<button data-action="restore">${icon('inbox')}Move to Inbox</button>` : ''}<button data-action="spam">${icon('spam')}Move to Spam</button><button data-action="reply-all">${icon('reply')}Reply all</button>${liveMail ? '' : `<button data-action="download-original">${icon('download')}Download sample .eml</button>`}</div>` : ''}
+    ${view.more ? `<div class="popover-menu">${misplaced([group], activeAddress()) ? `<button data-action="restore">${icon('inbox')}Restore to ${matches.every(item => homeFolder(item, activeAddress()) === 'sent') ? 'Sent' : 'Inbox'}</button>` : ''}<button data-action="spam">${icon('spam')}Move to Spam</button><button data-action="reply-all">${icon('reply')}Reply all</button>${liveMail ? '' : `<button data-action="download-original">${icon('download')}Download sample .eml</button>`}</div>` : ''}
     <div class="reader-scroll"><div class="subject-line"><h2>${esc(group.latest.subject)}</h2></div><div class="reader-labels"><span class="recipient-badge">${esc(activeAddress())}</span>${tags(group.latest)}${group.latest.status === 'sample' && group.latest.folder === 'sent' ? '<span class="tag">Sample message</span>' : ''}</div>
-    ${trash ? '<div class="retention-note">This conversation is in Trash. It will stay here until you explicitly delete it permanently. <button class="text-button" data-action="restore">Move to Inbox</button></div>' : ''}
+    ${trash ? '<div class="retention-note">This conversation is in Trash. It will stay here until you explicitly delete it permanently. <button class="text-button" data-action="restore">Restore</button></div>' : ''}
     ${messages.map((item, i) => mailCardHTML(item, i < messages.length - 1)).join('')}
     <div class="reply-actions"><button class="secondary-button" data-action="reply" ${canCompose() ? '' : 'disabled'}>${icon('reply')}Reply</button><button class="secondary-button" data-action="forward" ${canCompose() ? '' : 'disabled'}>${icon('forward')}Forward</button></div></div></section>`;
 }
@@ -210,13 +210,18 @@ async function openThread(thread) {
   }
   await commit();
 }
+// Where a message belongs in this mailbox: mail it sent goes in Sent, everything else in Inbox.
+const homeFolder = (message, address) => message.from === address ? 'sent' : 'inbox';
+const misplaced = (groups, address) => groups.some(group => group.matching.some(message => message.folder !== homeFolder(message, address)));
 async function moveCurrent(folder) { const group = selectedGroup(); if (group) await moveGroups([group], folder); }
 async function moveGroups(groups, folder) {
   const matching = groups.flatMap(group => group.matching);
   const ids = matching.map(message => message.id), before = matching.map(message => ({ id: message.id, folder: message.folder, previousFolder: message.previousFolder }));
   const domain = state.selectedDomain, address = activeAddress();
-  moveMessages(state, domain, ids, folder, address); view.selected = null; view.checked = []; view.more = false; render(); await commit();
-  toast(groups.length > 1 ? `Moved ${groups.length} conversations to ${folderNames[folder]}.` : `Moved to ${folderNames[folder]}.`, { undo: async () => { for (const item of before) { const message = state.messages.find(message => message.id === item.id && message.domain === domain); if (message && !state.deleted.some(deleted => deleted.id === item.id && deleted.domain === domain && (!deleted.mailbox || deleted.mailbox === address))) setMailboxState(message, address, { folder: item.folder, previousFolder: item.previousFolder }); } render(); await commit(); } });
+  // folder 'restore' sends each message back to its home folder.
+  for (const target of new Set(matching.map(message => folder === 'restore' ? homeFolder(message, address) : folder))) moveMessages(state, domain, matching.filter(message => (folder === 'restore' ? homeFolder(message, address) : folder) === target).map(message => message.id), target, address);
+  view.selected = null; view.checked = []; view.more = false; render(); await commit();
+  toast(folder === 'restore' ? groups.length > 1 ? `Restored ${groups.length} conversations.` : 'Restored.' : groups.length > 1 ? `Moved ${groups.length} conversations to ${folderNames[folder]}.` : `Moved to ${folderNames[folder]}.`, { undo: async () => { for (const item of before) { const message = state.messages.find(message => message.id === item.id && message.domain === domain); if (message && !state.deleted.some(deleted => deleted.id === item.id && deleted.domain === domain && (!deleted.mailbox || deleted.mailbox === address))) setMailboxState(message, address, { folder: item.folder, previousFolder: item.previousFolder }); } render(); await commit(); } });
 }
 function checkedGroups() { return threads().filter(group => view.checked.includes(group.id)); }
 async function markChecked(read) {
@@ -468,7 +473,7 @@ document.addEventListener('click', async event => {
       case 'archive': await moveCurrent('archive'); break;
       case 'trash': await moveCurrent('trash'); break;
       case 'spam': await moveCurrent('spam'); break;
-      case 'restore': await moveCurrent('inbox'); break;
+      case 'restore': await moveCurrent('restore'); break;
       case 'mark-unread': { for (const item of currentConversation()) { const original = state.messages.find(message => message.id === item.id && message.domain === item.domain); setMailboxState(original, activeAddress(), { read: false }); } view.selected = null; render(); await commit(); toast('Marked as unread.'); break; }
       case 'toggle-more': view.more = !view.more; render(); break;
       case 'previous': case 'next': { const list = threads(), position = list.findIndex(item => item.id === view.selected), next = list[position + (action === 'next' ? 1 : -1)]; if (next) await openThread(next.id); break; }
@@ -620,6 +625,8 @@ async function start() {
     state = seedState(); showStorageError(new Error(`${error.message} This preview is running without saved changes.`));
   }
   updateIndex(); settingsDomain = state.selectedDomain; render();
+  // The phone and desktop layouts differ in markup (e.g. the search hint), not only in CSS.
+  matchMedia('(max-width: 650px)').addEventListener('change', () => { if (!refreshing) render(); });
   if (liveMail && notifications.supported()) {
     notifications.register().catch(() => {});
     navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type === 'inbox:open') openLink(event.data.url, { reload: true }).catch(error => toast(error.message, { error: true })); });
