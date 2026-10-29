@@ -18,7 +18,8 @@ Real mail for all four addresses is received and sent here. support@example.org 
 - **Receiving:** MX `10 inbound-smtp.us-east-1.amazonaws.com` → SES receipt rules `project-inbox-example` and `project-inbox-exampleorg` (exact recipients, TLS required, spam/virus scan, no Stop) → raw message in the mail bucket under `incoming/` → SNS → SQS → worker Lambda. The worker parses, files the raw copy, bodies and parts under `mail/`, indexes search positions, threads by Message-ID/References, and publishes the message to each matching alias in one DSQL transaction. Routing uses only SES envelope recipients. Spam or virus failures go to Spam; virus failures are also quarantined and their attachments refuse download.
 - **Sending:** the app builds MIME, stores and indexes the sent copy, records a `sending` attempt, then calls SES once. Errors SES defines as definite mark the attempt `failed`; anything else is `uncertain` and is never retried automatically. Configuration-set events (delivery, bounce, complaint, reject, delay) flow through the same queue and update the attempt shown on the message.
 - **App:** CloudFront (OAC, SigV4) → Lambda function URL (AWS_IAM) running the owner-only Google sign-in gateway with `MAIL_MODE=real`. The direct function URL returns 403. Browser POSTs carry `x-amz-content-sha256`, which OAC requires.
-- **Database roles:** `inbox_mail` (app) and `inbox_worker` (worker) are mapped to their Lambda roles with per-table grants; neither can administer the cluster. The worker cannot send mail or delete objects.
+- **New Inbox mail:** once a message is filed in Inbox (never Spam), the worker sends a Web Push notification (sender and subject only) to every enrolled device and forwards a copy to that address's forwarding targets (Settings → Addresses, up to three outside addresses). A forward is sent from the receiving address with Reply-To set to the original sender, at most once per target (`mail.forward_attempts` is written before SES is called), and never for copies carrying this inbox's `X-Inbox-Forwarded` header. Neither is retried after a failure. VAPID keys live in Secrets Manager as `project-inbox-prod/push-vapid` (created once by `scripts/create-push-keys.mjs`; replacing them breaks every enrolled device). `/sw.js`, `/manifest.webmanifest` and the PNG icons are served without a session; on iPhone, notifications work only from the Home Screen app.
+- **Database roles:** `inbox_mail` (app) and `inbox_worker` (worker) are mapped to their Lambda roles with per-table grants; neither can administer the cluster. The worker cannot delete objects; it may send only forwarded copies, from the two domains.
 
 ## Validation (October 28, 2026)
 
@@ -32,8 +33,8 @@ Real mail for all four addresses is received and sent here. support@example.org 
 
 1. `npm test`, then `node scripts/package-production.mjs`. It builds `build/production/lambda.zip`, templates, and `release.json` locally only.
 2. Upload the ZIP to the artifacts bucket at the `artifactKey` from `release.json`.
-3. Create a change set for `project-inbox-prod-app` with `ArtifactKey` set to the new key and every other parameter `UsePreviousValue=true`. Review it, then execute.
-4. Schema changes: rerun `NODE_EXTRA_CA_CERTS=/etc/ssl/cert.pem node scripts/init-production-storage.mjs`. It is idempotent and never overwrites seeded aliases.
+3. Schema changes first: rerun `NODE_EXTRA_CA_CERTS=/etc/ssl/cert.pem node scripts/init-production-storage.mjs`. It is idempotent and never overwrites seeded aliases. New code must never run before its tables exist.
+4. Create a change set for `project-inbox-prod-app` with `ArtifactKey` set to the new key and every other parameter `UsePreviousValue=true`. Review it, then execute.
 5. Record the new checksum in `production/deployment.json`.
 
 ## Adding a receiving address

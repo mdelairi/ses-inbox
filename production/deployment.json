@@ -17,8 +17,8 @@
   "distributionId": "E1EXAMPLE00004",
   "distributionDomain": "d2example00000.cloudfront.net",
   "authTable": "project-inbox-prod-app-Sessions-EXAMPLE",
-  "artifactKey": "releases/f664a0b33a7d732ce05208d39ac1994a454c281ee636a6e935dfc1ef5fba4c24/lambda.zip",
-  "lambdaSha256": "f664a0b33a7d732ce05208d39ac1994a454c281ee636a6e935dfc1ef5fba4c24",
+  "artifactKey": "releases/ae2afb2b34d20ceb75e9112d4abafa1bbb7918ece12158c5180d4c3dd6da7d93/lambda.zip",
+  "lambdaSha256": "ae2afb2b34d20ceb75e9112d4abafa1bbb7918ece12158c5180d4c3dd6da7d93",
   "mailBucket": "project-inbox-prod-storage-mail-EXAMPLE",
   "mailDatabaseId": "exampleclusterprod00000000",
   "configurationSet": "project-inbox-prod-storage",
@@ -63,7 +63,8 @@
     "recoveryAlarmsHealthy": true,
     "temporaryRecoveryResourcesRemoved": true,
     "websiteCaptureDelivered": true,
-    "exampleorgStagingCaptureDelivered": true
+    "exampleorgStagingCaptureDelivered": true,
+    "publicPwaAssetsServed": true
   },
   "recovery": {
     "deployedOn": "2026-10-28",
@@ -120,5 +121,15 @@
       "folder": "info@example.com Sent",
       "permanentlyDeletedOn": "2026-10-29"
     }
+  },
+  "push": {
+    "deployedOn": "2026-10-29",
+    "vapidSecretArn": "arn:aws:secretsmanager:us-east-1:111111111111:secret:project-inbox-prod/push-vapid-EXAMPL",
+    "tables": [
+      "push_subscriptions",
+      "forward_rules",
+      "forward_attempts"
+    ],
+    "ownerDeviceTested": false
   }
 }
