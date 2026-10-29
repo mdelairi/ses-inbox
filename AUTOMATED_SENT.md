@@ -1,6 +1,6 @@
 # Automated Sent capture
 
-**Website production capture is live** (enabled 2026-10-29 03:39 UTC). The capture stack `project-inbox-prod-capture` and Inbox release `f664a0b…` run in production; the owner confirmed a real contact submission was delivered and appears in the Inbox. **ExampleOrg staging capture is not enabled**: its feedback stack exists, but the delivery stack has not been redeployed with `inboxCaptureBucket`. Identifiers are in `production/deployment.json` under `capture`.
+**Website production capture is live** (enabled 2026-10-29 03:39 UTC). The capture stack `project-inbox-prod-capture` and Inbox release `f664a0b…` run in production; the owner confirmed a real contact submission was delivered and appears in the Inbox. **ExampleOrg staging capture is live** (enabled 2026-10-29 05:26 UTC): two real staging invitations reached Gmail and were filed in no-reply@example.org Sent as automated/staging with status delivered. Identifiers are in `production/deployment.json` under `capture`.
 
 ## Coverage and source changes
 
@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Website production | Contact form email, preserving visitor Reply-To and existing routing | Sending enabled; **capture enabled** (2026-10-29) |
 | Website staging | Same contact path when that environment is explicitly enabled | Capture is off; do not enable sending implicitly |
-| ExampleOrg staging | Member and course invitations, course assignments, due and overdue reminders, weekly digests and marking notifications | Capture off. Feedback stack and write grant exist; delivery-stack enablement pending. Preserve existing staging allowlist, configuration set and sending switches |
+| ExampleOrg staging | Member and course invitations, course assignments, due and overdue reminders, weekly digests and marking notifications | **Capture enabled** (2026-10-29) through `inboxCaptureBucket` in ExampleOrg's `config/stage.mjs`. Existing staging allowlist, configuration set and sending switches are unchanged |
 | ExampleOrg production | Same explicit ordinary classifications when production sending is approved separately | Production application email remains disabled; capture does not enable it |
 | ExampleOrg trial-owner notification | Currently SNS email, outside the SES send helper | Decision required: leave this path outside Sent or separately convert it to SES |
 | ExampleOrg template-test email | Uses the generic sender without a capture classification | Outside the current patches; include through a separately reviewed explicit classification before claiming all ordinary SES mail is covered |
@@ -47,7 +47,7 @@ Three alarms cover worker crashes, queue age over five minutes and dead letters,
 
 ## Minimal finish
 
-**Progress (2026-10-29):** Steps 1–2 ran on October 28–29 for every stage except `ExampleorgStagingDelivery`. Its change set was never executed; a later ExampleOrg stage deploy superseded it. Remaining work: commit ExampleOrg's capture changes to the branch that stage deploys, redeploy `ExampleorgStagingDelivery` with `inboxCaptureBucket=project-inbox-prod-capture-EXAMPLE-us-east-1`, pass the staging feedback topic to the capture stack's `ExampleorgStagingFeedbackTopicArn`, then run step 3 for ExampleOrg. The ad-hoc release scripts used for steps 1–2 are under the ignored `.audit/capture-release/`, not in the repository.
+**Done (2026-10-29):** Both sources are live and checked with real mail. ExampleOrg's stage config carries `inboxCaptureBucket`, so every routine stage deploy keeps capture on; the capture stack subscribes to the staging feedback topic. Known follow-up: the copy-saved (S3) and delivery (SNS) events usually arrive together, and both import paths may run at once. One then fails a concurrent write and is retried about six minutes later. The result is a `capture-retry` log line and briefly late delivery status, never a lost or duplicated message. The feedback path also imports without logging `capture-imported`. The ad-hoc release scripts used on October 28–29 are under the ignored `.audit/capture-release/`, not in the repository.
 
 Finish the initial capture release for the already-active ExampleOrg staging mailers and website production contact handler. Keep the tested implementation and current infrastructure design; no replacement architecture, new capture sources or additional general-purpose rollout framework is needed. SNS trial alerts and template-test mail remain outside Sent and on the backlog; deciding their future implementation does not block this release. Website staging and ExampleOrg production capture remain disabled. This is the initial capture milestone, not completion of every Inbox version-one feature.
 

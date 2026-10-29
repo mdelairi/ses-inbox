@@ -105,14 +105,14 @@ Milestones are implementation order; all confirmed features remain in version-on
 - Discovery now establishes a low-volume baseline: 3 production and 87 staging account-level Send events in the last 30 complete UTC days; 3 current support-storage objects totaling 10,530 bytes. These are not a per-domain forecast. Finalize the monthly budget after selecting search/session/archive details; full findings and cost boundaries are in AWS_AUDIT.md.
 - Whether contact-form delivery should additionally appear as an Inbox inquiry; current confirmed scope includes capturing its outbound delivery in Sent.
 - Review the seeded sender display names/default aliases as needed. The private URL is settled: https://inbox.example.com.
-- The DSQL word index and direct Google session design are implemented. ExampleOrg staging capture and measured operating costs remain (website production capture is live); production backup rollout/restore verification is complete within the documented same-account/region scope. Production uses standard CloudFront usage pricing; no Free-plan saving is assumed. The recovery-window maximum is 30 days.
+- The DSQL word index and direct Google session design are implemented. Measured operating costs remain (automated Sent capture is live for the website and ExampleOrg staging); production backup rollout/restore verification is complete within the documented same-account/region scope. Production uses standard CloudFront usage pricing; no Free-plan saving is assumed. The recovery-window maximum is 30 days.
 - Future domain onboarding: configure infrastructure for new domains first; decide later whether the app should guide DNS/domain verification itself.
 
 ## Current implementation
 
 The local prototype and shared sample staging are implemented. Production has the owner-only gateway, real SES ingestion and sending, alias-scoped mailboxes, attachments, server drafts, threading, indexed word/phrase search, folder/read changes, deletion tombstones, and inline last-reference purge. `support@example.org` currently also reaches ExampleOrg's legacy `StoreSupport` rule.
 
-ExampleOrg staging Sent capture, background push, in-app production alias management, automatic refresh and complete pagination remain outstanding. Production backup/restore and hourly retention maintenance are deployed and cloud-verified for same-account/region recovery. Launch acceptance evidence and actual operating costs are incomplete. [PROJECT_STATUS.md](PROJECT_STATUS.md) tracks these items and separates implemented code from live verification. Production-data and synthetic cloud recovery/retention drills now pass; their scope and operational limits are documented in PRODUCTION_RECOVERY.md.
+Background push, in-app production alias management, automatic refresh and complete pagination remain outstanding. Production backup/restore and hourly retention maintenance are deployed and cloud-verified for same-account/region recovery. Launch acceptance evidence and actual operating costs are incomplete. [PROJECT_STATUS.md](PROJECT_STATUS.md) tracks these items and separates implemented code from live verification. Production-data and synthetic cloud recovery/retention drills now pass; their scope and operational limits are documented in PRODUCTION_RECOVERY.md.
 
 ## References consulted
 

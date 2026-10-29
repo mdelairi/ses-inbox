@@ -62,7 +62,8 @@
     "scheduledMaintenanceVerified": true,
     "recoveryAlarmsHealthy": true,
     "temporaryRecoveryResourcesRemoved": true,
-    "websiteCaptureDelivered": true
+    "websiteCaptureDelivered": true,
+    "exampleorgStagingCaptureDelivered": true
   },
   "recovery": {
     "deployedOn": "2026-10-28",
@@ -106,10 +107,11 @@
       "exampleorg-staging": {
         "stack": "ExampleorgStagingDelivery",
         "account": "222222222222",
-        "enabled": false,
+        "enabledAt": "2026-10-29T05:26:59Z",
+        "configuredIn": "exampleorg config/stage.mjs inboxCaptureBucket (commit b106617)",
         "feedbackStack": "project-inbox-capture-exampleorg-staging",
         "feedbackTopicArn": "arn:aws:sns:us-east-1:222222222222:project-inbox-capture-exampleorg-staging-Topic-EXAMPLE",
-        "note": "Producer write grant exists; capture env not deployed and feedback topic not yet passed to the capture stack"
+        "ownerConfirmedDelivery": "2026-10-29"
       }
     },
     "syntheticVerification": {
