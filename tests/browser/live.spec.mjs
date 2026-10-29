@@ -115,8 +115,8 @@ test('real mail: forwarding rules are set per receiving address', async ({ conte
   await live(context, page);
   await page.getByRole('button', { name: 'Aliases & settings' }).click();
   const card = page.locator('.alias-card').filter({ hasText: 'info@example.com' });
-  await expect(card.locator('.forward-summary')).toHaveText('Not forwarded');
-  await card.getByRole('button', { name: 'Forwarding' }).click();
+  await expect(card.locator('.forward-summary')).toHaveText('Forwarding: off');
+  await card.getByRole('button', { name: 'Set up forwarding' }).click();
   await page.locator('#forward-form textarea').fill('taylor@example.com');
   await page.getByRole('button', { name: 'Save forwarding' }).click();
   await expect(page.locator('#forward-error')).toHaveText('Forward to an address outside this inbox.');
@@ -124,10 +124,11 @@ test('real mail: forwarding rules are set per receiving address', async ({ conte
   await page.getByRole('button', { name: 'Save forwarding' }).click();
   await expect(card.locator('.forward-summary')).toHaveText('Forwards new mail to me@gmail.com, team@example.net');
   expect((await db.pool.query('SELECT target FROM mail.forward_rules ORDER BY target')).rows.map(row => row.target)).toEqual(['me@gmail.com', 'team@example.net']);
-  await card.getByRole('button', { name: 'Forwarding' }).click();
+  await card.getByRole('button', { name: 'Change forwarding' }).click();
   await page.locator('#forward-form textarea').fill('');
   await page.getByRole('button', { name: 'Save forwarding' }).click();
-  await expect(card.locator('.forward-summary')).toHaveText('Not forwarded');
+  await expect(card.locator('.forward-summary')).toHaveText('Forwarding: off');
+  await expect(card.getByRole('button', { name: 'Set up forwarding' })).toBeVisible();
 });
 
 test('real mail: notification settings list devices and send a test', async ({ context, page }) => {

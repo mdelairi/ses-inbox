@@ -196,3 +196,36 @@ input::placeholder, textarea::placeholder { color: #858c91; }
   .sidebar { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
   .sidebar-spacer { flex: none; min-height: 0; height: 18px; }
 }
+
+/* Address card actions: inline on wide screens, their own row on phones. */
+.alias-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.alias-card > div:not(.alias-actions) { flex: 1; min-width: 0; }
+
+/* Phones: settings in proportion. One heading size, 16px controls, comfortable line spacing. */
+@media (max-width: 650px) {
+  .settings-panel .panel-heading { gap: 12px; margin-bottom: 10px; }
+  .settings-panel .panel-heading h3 { font-size: 19px; }
+  .settings-domain-select { font-size: 15px; padding: 8px 10px; min-height: 40px; max-width: 46%; border-radius: 8px; }
+  .settings-panel .panel-description { font-size: 14px; line-height: 1.55; margin-bottom: 20px; }
+  .settings-panel .info-box { font-size: 14px; line-height: 1.55; padding: 14px 16px; }
+  .settings-panel .info-box strong { font-size: 15px; }
+  .alias-card { flex-wrap: wrap; align-items: flex-start; gap: 10px 12px; padding: 14px; }
+  .alias-icon { width: 36px; height: 36px; }
+  .alias-card strong { font-size: 16px; overflow-wrap: anywhere; }
+  .alias-card p, .forward-summary { font-size: 14px; line-height: 1.45; margin-top: 3px; }
+  .alias-card .tag { font-size: 12px; }
+  .alias-actions { flex-basis: 100%; padding-left: 46px; gap: 8px; }
+  .alias-actions .text-button { font-size: 15px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; }
+  .settings-panel .setting-row strong { font-size: 16px; }
+  .settings-panel .setting-row p { font-size: 14px; line-height: 1.45; margin-top: 3px; }
+  .settings-subheading { font-size: 16px; margin-top: 28px; }
+  .notification-preview { padding: 16px; }
+  .notification-card strong { font-size: 16px; margin: 6px 0 4px; }
+  .notification-card p { font-size: 15px; line-height: 1.4; }
+  .notification-card small { font-size: 12px; letter-spacing: .6px; }
+  .storage-stat small { font-size: 14px; }
+  .checkbox-row { font-size: 15px; gap: 10px; }
+  .checkbox-row input { width: 20px; height: 20px; }
+  .form-field { font-size: 14px; }
+  .form-field span { font-size: 13px !important; line-height: 1.4; }
+}
