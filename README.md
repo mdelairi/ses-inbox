@@ -1,5 +1,7 @@
 # SES Inbox
 
+[![Tests](https://github.com/mdelairi/ses-inbox/actions/workflows/test.yml/badge.svg)](https://github.com/mdelairi/ses-inbox/actions/workflows/test.yml)
+
 A private, multi-domain web mailbox built directly on Amazon SES, Aurora DSQL and S3 — with server-side search, a deletion ledger, verified backups and automated capture of mail that other systems send.
 
 I built it to replace a hosted mailbox for two small domains of my own (a personal site and a product). It has been running my real mail in production since October 2026. This repository is published as a **reference implementation**: the code, infrastructure templates, tests and runbooks are all here so you can read how it is built. It is not packaged as a turnkey product, and the hosted deployment itself stays private.

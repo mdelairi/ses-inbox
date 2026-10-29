@@ -1,6 +1,9 @@
 export default {
   testDir: './tests/browser',
-  timeout: 30000,
+  // A fresh browser profile takes a few seconds to open IndexedDB and seed the sample
+  // mailbox, and some journeys reload several times; parallel workers stretch both.
+  timeout: 60000,
+  expect: { timeout: 10000 },
   fullyParallel: true,
   workers: 2,
   reporter: 'list',
