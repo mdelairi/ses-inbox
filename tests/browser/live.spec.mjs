@@ -203,5 +203,14 @@ test('automated capture uses a read-only sender mailbox and shows staging/source
   await page.getByRole('button', { name: 'Open Your assigned workshop', exact: true }).click();
   await expect(page.getByText('Automated', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Staging', { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Reply', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Reply', exact: true }).first()).toBeDisabled();
+  // Phone settings: the read-only sender has its own icon and its badge on a separate row.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Back to message list' }).click();
+  await page.getByRole('button', { name: 'Open navigation' }).click(); await page.getByRole('button', { name: 'Aliases & settings' }).click();
+  const card = page.locator('.alias-card').filter({ hasText: 'no-reply@example.org' });
+  await expect(card.locator('.alias-icon.read-only')).toHaveCount(1);
+  await expect(card.locator('.alias-tags .tag')).toHaveText('Captured mail · read only');
+  expect(await card.locator('strong').evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(30);
+  if (process.env.INBOX_SHOTS) await page.screenshot({ path: `${process.env.INBOX_SHOTS}/captured-card.png` });
 });

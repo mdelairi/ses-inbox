@@ -229,3 +229,11 @@ input::placeholder, textarea::placeholder { color: #858c91; }
   .form-field { font-size: 14px; }
   .form-field span { font-size: 13px !important; line-height: 1.4; }
 }
+
+/* Address badges sit on their own row; read-only (captured) addresses use the sent icon. */
+.alias-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.alias-icon.read-only { border-style: dashed; color: #7c8489; }
+@media (max-width: 650px) {
+  .settings-panel .tag { font-size: 13px; padding: 3px 8px; }
+  .alias-card .alias-tags { margin-top: 7px; }
+}
