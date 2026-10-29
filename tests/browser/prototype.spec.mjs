@@ -153,3 +153,20 @@ test('Gmail formatting survives sanitizing while scripts, handlers and remote st
   expect(view).toEqual({ color: 'rgb(255, 0, 0)', family: 'georgia, serif', size: '18px', quoteBorder: 'solid', quoteMargin: '0.8ex', strike: true, sup: '2', centered: 'center',
     table: ['4', '1', '#eeeeee', '100%'], cell: ['right', 'top'], list: ['3', 'a'], tracked: ['', 'blue', null], scripts: 0 });
 });
+
+test('the top-bar inbox picker switches across domains in two taps', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Switch inbox: info@example.com' }).click();
+  await expect(page.getByRole('menuitem')).toHaveCount(5);
+  await page.getByRole('menuitem', { name: /^support@exampleorg\.com/ }).click();
+  await expect(page.locator('.breadcrumb-address')).toHaveText('support@example.org');
+  await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
+  await expect(page.locator('.list-footer')).toHaveText('Sample mail · support@example.org');
+  await page.getByRole('button', { name: 'Switch inbox: support@example.org' }).click();
+  await page.locator('.list-heading').click({ position: { x: 5, y: 5 } }); // outside the menu closes it
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Open A question about inviting our team', exact: true }).click();
+  for (const name of ['Archive conversation', 'Move conversation to Trash', 'Reply', 'Forward']) await expect(page.getByRole('button', { name, exact: true }).first()).toBeInViewport();
+  expect(await page.locator('.reader-actions').evaluate(bar => bar.getBoundingClientRect().bottom)).toBeLessThanOrEqual(844);
+  await expect(page.locator('.mailbox-note')).toHaveCount(0);
+});

@@ -122,3 +122,69 @@ input::placeholder, textarea::placeholder { color: #858c91; }
   .alias-card .text-button { font-size: 14px; }
   .sidebar .profile strong, .mailbox-note strong { font-size: 14px; }
 }
+
+/* Inbox picker in the top bar. */
+.mailbox-picker { position: relative; display: flex; align-items: center; gap: 6px; min-width: 140px; font-size: 11px; color: #91988e; white-space: nowrap; }
+.mailbox-switch-text strong { font-size: 12px; }
+.mailbox-picker .breadcrumb-address { font-size: 11px; font-weight: 550; color: #41474c; }
+.breadcrumb-folder svg { width: 10px; height: 10px; color: #b5baaf; }
+.mailbox-switch { display: flex; align-items: center; gap: 8px; min-width: 0; margin-left: -8px; padding: 5px 8px; border-radius: 8px; text-align: left; color: inherit; }
+.mailbox-switch:hover, .mailbox-switch[aria-expanded="true"] { background: var(--tint); }
+.mailbox-switch-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mailbox-switch-text strong { color: #2c3135; }
+.mailbox-switch .breadcrumb-address { overflow: hidden; text-overflow: ellipsis; }
+.picker-chevron svg { width: 14px; height: 14px; color: #6f777c; }
+.breadcrumb-folder { display: flex; align-items: center; gap: 10px; }
+.mailbox-menu { position: absolute; top: calc(100% + 8px); left: -8px; min-width: 290px; max-height: 70vh; overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 14px 44px #23382b26; z-index: 50; white-space: normal; }
+.mailbox-menu-domain { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0; padding: 12px 10px 5px; font-size: 11px; font-weight: 650; letter-spacing: .6px; text-transform: uppercase; color: #697177; }
+.mailbox-menu-domain small { font-weight: 450; letter-spacing: 0; text-transform: none; color: #8a9196; }
+.mailbox-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px; border-radius: 8px; font-size: 13px; color: #33393d; text-align: left; }
+.mailbox-option > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mailbox-option small { margin-left: 8px; font-size: 11px; color: #7c8489; }
+.mailbox-option:hover, .mailbox-option.current { background: var(--tint); }
+.mailbox-option svg { width: 15px; height: 15px; color: var(--accent); flex: none; }
+.mailbox-option .count { background: var(--tint); border-radius: 4px; padding: 1px 6px; font-size: 11px; }
+
+/* Wide screens: reader and bulk actions stay compact icons in their toolbars. */
+.reader-actions { display: flex; align-items: center; gap: 8px; }
+.bar-label, [data-bar-only] { display: none; }
+.list-footer { justify-content: center; }
+.select-all { width: 40px; margin-left: -13px; padding: 0; justify-content: center; }
+.row-check { padding-top: 21px; }
+
+@media (max-width: 650px) {
+  .mobile-menu { width: 44px; height: 44px; margin-left: -6px; }
+  .mobile-menu svg { width: 24px; height: 24px; }
+  .topbar .mailbox-picker { flex: 1; min-width: 0; }
+  .mailbox-switch-text strong { font-size: 14px; }
+  .mailbox-picker .breadcrumb-address { font-size: 12px; }
+  .topbar .search-field { width: 42%; min-width: 0; flex: none; }
+  .breadcrumb-folder { display: none; }
+  .mailbox-switch { margin-left: 0; padding: 6px 8px; max-width: 100%; }
+  .mailbox-menu { position: fixed; top: 70px; left: 8px; right: 8px; min-width: 0; max-height: calc(100dvh - 96px); }
+  .mailbox-menu-domain { font-size: 12px; }
+  .mailbox-option { font-size: 16px; padding: 13px 12px; }
+
+  /* Bottom action bars, above the home indicator. */
+  .reader-actions, .bulk-actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; justify-content: space-around; gap: 0; margin: 0; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -6px 24px #21322012; overflow: visible; }
+  .reader-actions .bar-button, .bulk-actions .bar-button { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; width: auto; height: 54px; color: #4f595f; }
+  .reader-actions .bar-button svg, .bulk-actions .bar-button svg { width: 24px; height: 24px; }
+  .bar-label { display: block; font-size: 11px; }
+  .reader-actions .toolbar-separator { display: none; }
+  .reader-actions [data-bar-only] { display: flex; }
+  .reader-toolbar .icon-button:not(.bar-button) { width: 44px; height: 44px; }
+  .reader-toolbar .icon-button:not(.bar-button) svg { width: 22px; height: 22px; }
+  .reader-scroll { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .popover-menu { position: fixed; top: auto; right: 10px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 35; }
+  .popover-menu button { font-size: 15px; padding: 12px 14px; }
+  .bulk-bar > .icon-button { width: 44px; height: 44px; }
+  .bulk-bar > .icon-button svg { width: 22px; height: 22px; }
+  .has-checked .mobile-compose, .has-checked .list-footer { display: none; }
+  .has-checked .thread-list { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+
+  /* The footer and Compose button sit above the home indicator. */
+  .list-footer { height: auto; min-height: 38px; padding-bottom: env(safe-area-inset-bottom); font-size: 12px; }
+  .mobile-compose { bottom: calc(52px + env(safe-area-inset-bottom)); }
+  .row-check input, .select-all input { width: 20px; height: 20px; }
+  .row-check { padding-top: 19px; }
+}

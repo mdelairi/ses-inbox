@@ -43,7 +43,7 @@ const composeDialog = document.querySelector('#compose-dialog');
 const settingsDialog = document.querySelector('#settings-dialog');
 const aliasDialog = document.querySelector('#alias-dialog');
 const confirmDialog = document.querySelector('#confirm-dialog');
-let state, index, view = { folder: 'inbox', selected: null, checked: [], query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, domainMenu: false, filters: false, more: false };
+let state, index, view = { folder: 'inbox', selected: null, checked: [], mailboxMenu: false, query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, domainMenu: false, filters: false, more: false };
 let composer = null, draftTimer, saveQueue = Promise.resolve(), settingsTab = 'aliases', settingsDomain, confirmCallback, lastRange, refreshing = false, lastChecked = null, pushStatus = null;
 // Live forwarding rules by receiving address, loaded when the Addresses settings open.
 const forwardRules = new Map();
@@ -56,6 +56,8 @@ const initials = name => String(name || '?').split(/\s+/).slice(0, 2).map(word =
 const prettySize = size => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`;
 function timeShort(date) { const value = new Date(date); return value.toDateString() === new Date().toDateString() ? value.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : value.toLocaleDateString([], { month: 'short', day: 'numeric' }); }
 function timeFull(date) { return new Date(date).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+// Labelled action: an icon on wide screens, icon and label in the phone's bottom bar.
+function barButton(name, label, title, action, extra = '') { return `<button class="icon-button bar-button" type="button" aria-label="${esc(title)}" title="${esc(title)}" data-action="${action}" ${extra}>${icon(name)}<span class="bar-label">${esc(label)}</span></button>`; }
 function buttons(name, title, action, extra = '') { return `<button class="icon-button" type="button" aria-label="${esc(title)}" title="${esc(title)}" data-action="${action}" ${extra}>${icon(name)}</button>`; }
 function tags(message) { return `${message.source === 'automated' ? '<span class="tag automated">Automated</span>' : ''}${message.environment === 'staging' ? '<span class="tag staging">Staging</span>' : message.source === 'automated' ? '<span class="tag">Production</span>' : ''}${message.status === 'local' ? '<span class="tag local">Local preview</span>' : ''}${message.delivery ? `<span class="tag delivery-${esc(message.delivery.state)}" title="${esc(message.delivery.detail || '')}">${DELIVERY[message.delivery.state] || esc(message.delivery.state)}</span>` : ''}${message.quarantined ? '<span class="tag">Virus check failed</span>' : ''}`; }
 const activeAddress = () => selectedMailbox(state)?.address || '';
@@ -103,18 +105,26 @@ function sidebarHTML() {
 
     <button class="compose-button" data-action="compose" ${canCompose() ? '' : 'disabled'}>${icon('plus')}Compose</button><p class="nav-label">MAILBOX</p>
     <nav class="folder-nav" aria-label="Mail folders">${FOLDERS.map(folder => { const count = folder === 'drafts' ? mailboxDrafts().length : folder === 'inbox' ? state.messages.filter(message => message.domain === domain.id && mailboxEntries(message)[activeAddress()]?.folder === folder && !mailboxEntries(message)[activeAddress()].read).length : 0; return `<button class="folder-button${view.folder === folder && !view.query ? ' active' : ''}" data-action="folder" data-folder="${folder}" ${view.folder === folder && !view.query ? 'aria-current="page"' : ''}>${icon(folderIcons[folder])}<span>${folderNames[folder]}</span>${count ? `<b class="count">${count}</b>` : ''}</button>`; }).join('')}</nav>
-    <div class="sidebar-spacer"></div><div class="mailbox-note">${canCompose() ? 'Compose and reply from' : 'Viewing mail for'}<strong>${esc(activeAddress())}</strong></div>
+    <div class="sidebar-spacer"></div>
     <div class="sidebar-bottom"><button class="folder-button settings-button" data-action="settings">${icon('settings')}<span>Aliases & settings</span></button></div>
     <div class="profile"><span class="avatar">TE</span><span><strong>Taylor Example</strong><small>${liveMail ? 'Live mail' : 'Local prototype'}</small></span>${liveMail ? '' : '<span class="local-indicator" title="Sample data only"></span>'}</div></aside>`;
 }
 function topbarHTML() {
-  return `<header class="topbar">${buttons('menu', 'Open navigation', 'toggle-sidebar', 'class="mobile-menu"').replace('class="icon-button"', 'class="icon-button mobile-menu"').replace(' class="mobile-menu"', '')}<div class="breadcrumb"><strong>${esc(domainOf(state, state.selectedDomain).name)}</strong><span class="breadcrumb-address">${esc(activeAddress())}</span>${icon('right')}<span>${view.query ? 'Search' : folderNames[view.folder]}</span></div>
+  return `<header class="topbar">${buttons('menu', 'Open navigation', 'toggle-sidebar', 'class="mobile-menu"').replace('class="icon-button"', 'class="icon-button mobile-menu"').replace(' class="mobile-menu"', '')}<div class="mailbox-picker"><button class="mailbox-switch" data-action="toggle-mailbox-menu" aria-haspopup="true" aria-expanded="${view.mailboxMenu}" aria-label="Switch inbox: ${esc(activeAddress())}"><span class="mailbox-switch-text"><strong>${esc(domainOf(state, state.selectedDomain).name)}</strong><span class="breadcrumb-address">${esc(activeAddress())}</span></span><span class="picker-chevron">${icon('chevron')}</span></button><span class="breadcrumb-folder">${icon('right')}<span>${view.query ? 'Search' : folderNames[view.folder]}</span></span>${view.mailboxMenu ? mailboxMenuHTML() : ''}</div>
     <label class="search-field">${icon('search')}<span class="sr-only">Search current mailbox</span><input id="mail-search" type="search" autocomplete="off" placeholder="Search ${esc(activeAddress())}" value="${esc(view.query)}">${view.query ? `<button class="search-clear" data-action="clear-search" type="button" aria-label="Clear search">${icon('close')}</button>` : '<span class="shortcut" aria-hidden="true">/</span>'}</label>
     ${liveMail ? '' : '<span class="preview-label"><span></span>Local prototype</span>'}${liveMail ? buttons('bell', 'Notifications', 'open-notifications') : buttons('bell', 'Preview new-mail notification', 'preview-notification')}</header>`;
 }
 function selectAllHTML(groups) {
   const checked = groups.filter(group => view.checked.includes(group.id)).length;
   return groups.length ? `<label class="select-all" title="Select all"><input type="checkbox" id="check-all" data-action="check-all" aria-label="Select all ${groups.length} conversations" ${checked && checked === groups.length ? 'checked' : ''} data-partial="${checked > 0 && checked < groups.length}"></label>` : '';
+}
+const inboxUnread = (domain, address) => state.messages.filter(message => message.domain === domain && mailboxEntries(message)[address]?.folder === 'inbox' && !mailboxEntries(message)[address].read).length;
+// Every inbox in one list, grouped by domain: switching across domains takes two taps.
+function mailboxMenuHTML() {
+  return `<div class="mailbox-menu" role="menu" aria-label="Choose inbox">${state.domains.map(domain => `<p class="mailbox-menu-domain">${esc(domain.name)}<small>${esc(domain.id)}</small></p>${mailboxesOf(state, domain.id).map(alias => {
+    const current = domain.id === state.selectedDomain && alias.address === activeAddress(), unread = inboxUnread(domain.id, alias.address);
+    return `<button role="menuitem" class="mailbox-option${current ? ' current' : ''}" data-action="pick-mailbox" data-domain="${esc(domain.id)}" data-address="${esc(alias.address)}"><span>${esc(alias.address)}${alias.captured ? '<small>Sent only</small>' : ''}</span>${unread ? `<b class="count">${unread}</b>` : ''}${current ? icon('check') : ''}</button>`;
+  }).join('')}`).join('')}</div>`;
 }
 function filterHTML(groups) {
   const active = view.source || view.environment;
@@ -125,8 +135,7 @@ function filterHTML(groups) {
 // Bulk actions apply to whole conversations in this mailbox, like the reader toolbar does.
 function bulkHTML(groups) {
   const folder = view.query ? '' : view.folder, count = view.checked.length;
-  const action = (name, title, act, extra = '') => buttons(name, title, act, extra);
-  return `<div class="list-filterbar bulk-bar" role="toolbar" aria-label="Selected conversations">${selectAllHTML(groups)}<strong class="bulk-count">${count} selected</strong><span class="bulk-actions">${action('read', 'Mark as read', 'bulk-read')}${action('mail', 'Mark as unread', 'bulk-unread')}${folder !== 'archive' ? action('archive', 'Archive', 'bulk-move', 'data-folder="archive"') : ''}${folder && folder !== 'inbox' ? action('inbox', 'Move to Inbox', 'bulk-move', 'data-folder="inbox"') : ''}${folder !== 'spam' ? action('spam', 'Move to Spam', 'bulk-move', 'data-folder="spam"') : ''}${folder === 'trash' ? action('trash', 'Delete permanently', 'bulk-delete') : action('trash', 'Move to Trash', 'bulk-move', 'data-folder="trash"')}${action('forward', 'Forward selected', 'bulk-forward', canCompose() ? '' : 'disabled')}${action('close', 'Clear selection', 'bulk-clear')}</span></div>`;
+  return `<div class="list-filterbar bulk-bar" role="toolbar" aria-label="Selected conversations">${selectAllHTML(groups)}<strong class="bulk-count">${count} selected</strong><span class="bulk-actions">${barButton('read', 'Read', 'Mark as read', 'bulk-read')}${barButton('mail', 'Unread', 'Mark as unread', 'bulk-unread')}${folder !== 'archive' ? barButton('archive', 'Archive', 'Archive', 'bulk-move', 'data-folder="archive"') : ''}${folder && folder !== 'inbox' ? barButton('inbox', 'Inbox', 'Move to Inbox', 'bulk-move', 'data-folder="inbox"') : ''}${folder !== 'spam' ? barButton('spam', 'Spam', 'Move to Spam', 'bulk-move', 'data-folder="spam"') : ''}${folder === 'trash' ? barButton('trash', 'Delete', 'Delete permanently', 'bulk-delete') : barButton('trash', 'Trash', 'Move to Trash', 'bulk-move', 'data-folder="trash"')}${barButton('forward', 'Forward', 'Forward selected', 'bulk-forward', canCompose() ? '' : 'disabled')}</span>${buttons('close', 'Clear selection', 'bulk-clear')}</div>`;
 }
 function rowHTML(group) {
   const message = group.latest, count = conversation(state, state.selectedDomain, group.id, activeAddress()).length;
@@ -144,7 +153,7 @@ function listHTML() {
   view.checked = view.checked.filter(id => groups.some(group => group.id === id));
   const count = draftView ? drafts.length : groups.length;
   const title = view.query ? 'Search results' : folderNames[view.folder];
-  return `<section class="message-list" aria-label="${esc(title)} message list">${mailboxTabsHTML()}<div class="list-heading"><div><h1>${title}</h1><p>${view.query ? `“${esc(view.query)}” · ` : ''}${count} ${draftView ? count === 1 ? 'draft' : 'drafts' : count === 1 ? 'conversation' : 'conversations'}${!draftView && view.folder === 'inbox' && !view.query ? ' · this address only' : ''}</p></div>${buttons('refresh', liveMail ? 'Check for new mail' : 'Refresh local preview', 'refresh')}</div>${draftView ? '' : view.checked.length ? bulkHTML(groups) : filterHTML(groups)}<div class="thread-list">${draftView ? drafts.map(draftRowHTML).join('') : groups.map(rowHTML).join('')}${!count ? `<div class="empty-list">${icon(view.query ? 'search' : folderIcons[view.folder])}<strong>${view.query ? 'No matching conversations' : draftView ? 'A little room for your next thought' : `Nothing in ${folderNames[view.folder]}`}</strong><p>${view.query ? 'Try another word or clear your filters.' : draftView ? 'Your unfinished messages will be kept here.' : view.folder === 'trash' ? 'Mail stays here until you delete it permanently.' : 'You’re all caught up here.'}</p>${view.query || view.alias || view.source || view.environment || view.unread ? '<button class="text-button" data-action="reset-view">Clear search & filters</button>' : ''}</div>` : ''}</div><div class="list-footer"><span>${liveMail ? 'Live mail' : draftView ? 'Drafts stay in this browser' : 'Sample mail · no live connection'}</span><span>${esc(activeAddress())}</span></div></section>`;
+  return `<section class="message-list" aria-label="${esc(title)} message list">${mailboxTabsHTML()}<div class="list-heading"><div><h1>${title}</h1><p>${view.query ? `“${esc(view.query)}” · ` : ''}${count} ${draftView ? count === 1 ? 'draft' : 'drafts' : count === 1 ? 'conversation' : 'conversations'}${!draftView && view.folder === 'inbox' && !view.query ? ' · this address only' : ''}</p></div>${buttons('refresh', liveMail ? 'Check for new mail' : 'Refresh local preview', 'refresh')}</div>${draftView ? '' : view.checked.length ? bulkHTML(groups) : filterHTML(groups)}<div class="thread-list">${draftView ? drafts.map(draftRowHTML).join('') : groups.map(rowHTML).join('')}${!count ? `<div class="empty-list">${icon(view.query ? 'search' : folderIcons[view.folder])}<strong>${view.query ? 'No matching conversations' : draftView ? 'A little room for your next thought' : `Nothing in ${folderNames[view.folder]}`}</strong><p>${view.query ? 'Try another word or clear your filters.' : draftView ? 'Your unfinished messages will be kept here.' : view.folder === 'trash' ? 'Mail stays here until you delete it permanently.' : 'You’re all caught up here.'}</p>${view.query || view.alias || view.source || view.environment || view.unread ? '<button class="text-button" data-action="reset-view">Clear search & filters</button>' : ''}</div>` : ''}</div><div class="list-footer"><span>${liveMail ? '' : 'Sample mail · '}${esc(activeAddress())}</span></div></section>`;
 }
 function mailCardHTML(message, collapsed) {
   const sender = `<span class="sender-avatar">${esc(initials(message.fromName))}</span>`;
@@ -158,7 +167,7 @@ function readerHTML() {
   if (!group) return `<section class="reader" aria-label="Reading pane"><div class="reader-toolbar"><span class="toolbar-note">${icon('mail')}A calmer place for your project mail</span></div><div class="reader-empty"><div class="empty-icon">${icon('mail')}</div><h2>One address at a time.</h2><p>Choose a conversation, or start a new one from ${esc(activeAddress())}.</p><button class="secondary-button" data-action="compose" ${canCompose() ? '' : 'disabled'}>${icon('plus')}Write a message</button><span class="keyboard-note"><kbd>C</kbd> to compose <span>·</span> <kbd>/</kbd> to search</span></div></section>`;
   const messages = currentConversation(), message = messages.at(-1), position = threads().findIndex(item => item.id === group.id), matches = group.matching;
   const trash = matches.every(item => item.folder === 'trash');
-  return `<section class="reader" aria-label="Reading pane"><div class="reader-toolbar">${buttons('left', 'Back to message list', 'back', 'data-back="true"').replace('class="icon-button"', 'class="icon-button back-button"')}${buttons('archive', 'Archive conversation', 'archive')}${buttons('trash', trash ? 'Delete permanently' : 'Move conversation to Trash', trash ? 'delete-permanently' : 'trash')}${buttons('mail', 'Mark conversation unread', 'mark-unread')}<span class="toolbar-separator"></span>${buttons('more', 'More message actions', 'toggle-more')}
+  return `<section class="reader" aria-label="Reading pane"><div class="reader-toolbar">${buttons('left', 'Back to message list', 'back', 'data-back="true"').replace('class="icon-button"', 'class="icon-button back-button"')}<div class="reader-actions">${barButton('archive', 'Archive', 'Archive conversation', 'archive')}${barButton('trash', trash ? 'Delete' : 'Trash', trash ? 'Delete permanently' : 'Move conversation to Trash', trash ? 'delete-permanently' : 'trash')}${barButton('mail', 'Unread', 'Mark conversation unread', 'mark-unread')}<span class="toolbar-separator"></span>${barButton('reply', 'Reply', 'Reply', 'reply', `data-bar-only ${canCompose() ? '' : 'disabled'}`)}${barButton('forward', 'Forward', 'Forward', 'forward', `data-bar-only ${canCompose() ? '' : 'disabled'}`)}${barButton('more', 'More', 'More message actions', 'toggle-more')}</div>
     <div class="right-actions"><span class="message-position">${position + 1} of ${threads().length}</span>${buttons('left', 'Previous conversation', 'previous', position === 0 ? 'disabled' : '')}${buttons('right', 'Next conversation', 'next', position === threads().length - 1 ? 'disabled' : '')}</div></div>
     ${view.more ? `<div class="popover-menu">${matches.some(item => ['trash', 'spam', 'archive'].includes(item.folder)) ? `<button data-action="restore">${icon('inbox')}Move to Inbox</button>` : ''}<button data-action="spam">${icon('spam')}Move to Spam</button><button data-action="reply-all">${icon('reply')}Reply all</button>${liveMail ? '' : `<button data-action="download-original">${icon('download')}Download sample .eml</button>`}</div>` : ''}
     <div class="reader-scroll"><div class="subject-line"><h2>${esc(group.latest.subject)}</h2></div><div class="reader-labels"><span class="recipient-badge">${esc(activeAddress())}</span>${tags(group.latest)}${group.latest.status === 'sample' && group.latest.folder === 'sent' ? '<span class="tag">Sample message</span>' : ''}</div>
@@ -183,7 +192,7 @@ function render() {
   state.selectedMailboxes ||= {}; state.selectedMailboxes[domain.id] = activeAddress();
   if (view.selected && !selectedGroup()) view.selected = null;
   document.documentElement.style.setProperty('--accent', domain.id === 'example.org' ? '#365f8c' : '#426859');
-  root.innerHTML = `<div class="app-shell${view.selected ? ' has-selection' : ''}${view.mobileSidebar ? ' sidebar-open' : ''}"><button class="mobile-backdrop" data-action="close-sidebar" aria-label="Close navigation"></button>${sidebarHTML()}<main class="workspace">${topbarHTML()}<div class="mail-layout">${listHTML()}${readerHTML()}</div><button class="mobile-compose" data-action="compose" aria-label="Compose" ${canCompose() ? '' : 'disabled'}>${icon('plus')}Compose</button></main></div>`;
+  root.innerHTML = `<div class="app-shell${view.selected ? ' has-selection' : ''}${view.checked.length ? ' has-checked' : ''}${view.mobileSidebar ? ' sidebar-open' : ''}"><button class="mobile-backdrop" data-action="close-sidebar" aria-label="Close navigation"></button>${sidebarHTML()}<main class="workspace">${topbarHTML()}<div class="mail-layout">${listHTML()}${readerHTML()}</div><button class="mobile-compose" data-action="compose" aria-label="Compose" ${canCompose() ? '' : 'disabled'}>${icon('plus')}Compose</button></main></div>`;
   const all = root.querySelector('#check-all'); if (all) all.indeterminate = all.dataset.partial === 'true';
   mountFrames(); document.title = `${view.query ? 'Search' : folderNames[view.folder]} · ${activeAddress()}`;
 }
@@ -420,6 +429,11 @@ function previewNotification(message) {
 }
 function downloadBlob(blob, name) { const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = name.replace(/[\/\\\x00-\x1f]/g, '_'); anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 5000); }
 
+// A click outside the open inbox picker closes it; a click on another control still runs.
+document.addEventListener('click', event => {
+  if (!view.mailboxMenu || (event.target instanceof Element && event.target.closest('.mailbox-picker'))) return;
+  view.mailboxMenu = false; if (!(event.target instanceof Element && event.target.closest('[data-action]'))) render();
+}, true);
 document.addEventListener('click', async event => {
   const element = event.target instanceof Element ? event.target.closest('[data-action]') : null;
   if (!element || element.disabled) return;
@@ -427,6 +441,8 @@ document.addEventListener('click', async event => {
   try {
     switch (action) {
       case 'toggle-domain': view.domainMenu = !view.domainMenu; render(); break;
+      case 'toggle-mailbox-menu': view.mailboxMenu = !view.mailboxMenu; render(); if (view.mailboxMenu) root.querySelector('.mailbox-option.current')?.focus(); break;
+      case 'pick-mailbox': state.selectedDomain = domain; state.selectedMailboxes ||= {}; state.selectedMailboxes[domain] = element.dataset.address; view.mailboxMenu = false; view.domainMenu = false; setFolder(selectedMailbox(state)?.captured ? 'sent' : 'inbox'); await commit(); break;
       case 'switch-domain': state.selectedDomain = domain; view.domainMenu = false; setFolder('inbox'); await commit(); break;
       case 'switch-mailbox': state.selectedMailboxes ||= {}; state.selectedMailboxes[state.selectedDomain] = element.dataset.address; setFolder(selectedMailbox(state)?.captured ? 'sent' : 'inbox'); await commit(); break;
       case 'toggle-sidebar': view.mobileSidebar = !view.mobileSidebar; render(); break;
@@ -569,7 +585,7 @@ document.addEventListener('keydown', event => {
   if (editing || composeDialog.open || aliasDialog.open || confirmDialog.open || settingsDialog.open || event.metaKey || event.ctrlKey || event.altKey) return;
   if (event.key.toLowerCase() === 'c') { event.preventDefault(); openComposer(); }
   if (event.key === '/') { event.preventDefault(); document.querySelector('#mail-search').focus(); }
-  if (event.key === 'Escape') { view.domainMenu = false; view.filters = false; view.more = false; view.mobileSidebar = false; view.selected = null; render(); }
+  if (event.key === 'Escape') { view.mailboxMenu = false; view.domainMenu = false; view.filters = false; view.more = false; view.mobileSidebar = false; view.selected = null; render(); }
 });
 composeDialog.addEventListener('cancel', event => { event.preventDefault(); void closeComposer(); });
 composeDialog.addEventListener('paste', event => {
