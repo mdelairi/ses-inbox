@@ -169,7 +169,13 @@ function readerHTML() {
 function mountFrames() {
   root.querySelectorAll('[data-message-frame]').forEach(frame => {
     const message = state.messages.find(item => item.id === frame.dataset.messageFrame && item.domain === state.selectedDomain);
-    if (message) { frame.srcdoc = messageDocument(message.html, remoteLoaded.has(message.id) || state.preferences.externalImages); frame.style.height = `${Math.max(250, Math.min(750, 140 + (message.text || htmlText(message.html)).split('\n').length * 22))}px`; }
+    // The sandboxed frame cannot report its height, so estimate wrapped lines at its actual width.
+    if (message) {
+      frame.srcdoc = messageDocument(message.html, remoteLoaded.has(message.id) || state.preferences.externalImages);
+      const narrow = frame.clientWidth <= 600, perLine = Math.max(28, Math.floor(frame.clientWidth / (narrow ? 8.5 : 7.5)));
+      const lines = (message.text || htmlText(message.html)).split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / perLine)), 0);
+      frame.style.height = `${Math.max(250, Math.min(6000, 140 + lines * (narrow ? 28 : 26)))}px`;
+    }
   });
 }
 function render() {

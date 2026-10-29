@@ -1,6 +1,6 @@
 --- a/infra/delivery-stack.ts
 +++ b/infra/delivery-stack.ts
-@@ -165,6 +165,22 @@
+@@ -168,6 +168,22 @@
        f.addEnvironment('LIVE_EVENTS_HTTP', liveEvents.httpDns);
        f.addEnvironment('LIVE_EVENTS_REALTIME', liveEvents.realtimeDns);
        f.addEnvironment('LIVE_EVENTS_KEY', liveEvents.apiKeys.players.attrApiKey);

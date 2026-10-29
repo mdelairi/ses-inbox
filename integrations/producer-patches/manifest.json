@@ -18,8 +18,8 @@
     {
       "project": "exampleorg",
       "path": "infra/delivery-stack.ts",
-      "sourceSha256": "8d8fc30b9979d9108ca2e5bb670dbfba32d7bea683cf80fbf7e55e4d768d008f",
-      "proposedSha256": "50558f65393901e5ba16c847fa5001401539e67d818eb6146885df0d14f49863",
+      "sourceSha256": "dff329c72affe1d6ef8fcd2ff59b085ff800360a4311019e295b5f03aa212f48",
+      "proposedSha256": "398869b8dbd02fb8542a49f8a152cfb1f02df18b2dff5eee3a785d17a3deaab3",
       "applied": false
     },
     {

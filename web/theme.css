@@ -89,3 +89,36 @@ input::placeholder, textarea::placeholder { color: #858c91; }
 .mailbox-tab .count { background: var(--tint); border-radius: 4px; padding: 1px 5px; color: #42494e; font-size: 9px; }
 .mailbox-tab:focus-visible { outline-offset: -4px; }
 @media (max-width: 650px) { .mailbox-tabs { padding: 0 13px; min-height: 47px; } .mailbox-tab { padding-top: 13px; padding-bottom: 11px; } }
+
+/* Phones: a readable type scale. Content text is 14–16px, nothing below 11px, and every
+   text field is 16px so iOS does not zoom the page when it is focused. */
+@media (max-width: 650px) {
+  .row-head strong, .row-subject { font-size: 15px; }
+  .row-snippet { font-size: 14px; line-height: 1.5; }
+  .row-head time, .row-alias, .row-foot, .bulk-count { font-size: 12px; }
+  .tag, .count, .thread-count, .mailbox-tab .count { font-size: 11px; }
+  .breadcrumb strong { font-size: 14px; }
+  .breadcrumb-address, .list-heading p, .list-footer, .message-position, .recipient-badge { font-size: 12px; }
+  .list-heading h1 { font-size: 26px; }
+  .mailbox-tab { font-size: 15px; }
+  .view-toggle, .filter-button, .text-button, .cc-toggle { font-size: 14px; }
+  .search-field input, .compose-field input, .compose-field select, .form-field input, .form-field textarea, .filters-popover select { font-size: 16px; }
+  .folder-button, .compose-button, .mobile-compose, .primary-button, .secondary-button, .compose-footer .primary-button { font-size: 15px; }
+  .nav-label, .eyebrow, .profile small { font-size: 11px; }
+  .domain-meta strong, .profile strong { font-size: 15px; }
+  .mailbox-note, .sender-details p, .sender-details .email-address, .sender-line time, .attachment small, .file-chip, .save-status, .compose-footer .save-status { font-size: 13px; }
+  .sender-details strong, .attachment strong, .collapsed-message, .confirm-copy { font-size: 15px; }
+  .body-text, .editor { font-size: 16px; }
+  .compose-field label, .form-field, .remote-notice, .retention-note { font-size: 13px; }
+  .dialog-header h2 { font-size: 16px; }
+  .dialog-header p, .info-box, .forward-summary, .setting-row p, .alias-card p { font-size: 13px; }
+  .settings-tab { font-size: 14px; }
+  .panel-heading h3 { font-size: 20px; }
+  .panel-description, .toast { font-size: 14px; }
+  .setting-row strong, .alias-card strong, .settings-subheading { font-size: 15px; }
+  .format-button { font-size: 15px; }
+  .breadcrumb .breadcrumb-address, .reader-toolbar .message-position { font-size: 12px; }
+  .brand span small { font-size: 10px; }
+  .alias-card .text-button { font-size: 14px; }
+  .sidebar .profile strong, .mailbox-note strong { font-size: 14px; }
+}

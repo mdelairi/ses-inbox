@@ -137,3 +137,19 @@ test('info and support have separate inboxes, drafts, search, sent and fixed sen
   await expect(page.getByRole('tab', { name: 'Open mailbox support@example.org', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.breadcrumb-address')).toHaveText('support@example.org');
 });
+
+test('Gmail formatting survives sanitizing while scripts, handlers and remote styles do not', async ({ page }) => {
+  const html = await page.evaluate(async () => (await import('/safety.mjs')).sanitizeHTML(`<div dir="ltr"><font color="#ff0000" face="georgia, serif" size="4">Big red serif</font> <strike>old</strike> E=mc<sup>2</sup>
+    <div class="gmail_quote"><blockquote class="gmail_quote" style="margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex">Quoted reply</blockquote></div>
+    <center>Centered</center><table cellpadding="4" border="1" bgcolor="#eeeeee" width="100%"><tr><td align="right" valign="top" style="vertical-align:top">Cell</td></tr></table>
+    <ol start="3" type="a"><li>third</li></ol><span style="background:url(https://track.example/x.png);color:blue" onclick="alert(1)">tracked</span><script>alert(1)</script></div>`));
+  const view = await page.evaluate(markup => { const box = document.createElement('div'); box.innerHTML = markup; document.body.append(box);
+    const font = box.querySelector('span'), quote = box.querySelector('blockquote'), tracked = [...box.querySelectorAll('span')].find(item => item.textContent === 'tracked');
+    return { color: getComputedStyle(font).color, family: font.style.fontFamily, size: font.style.fontSize, quoteBorder: getComputedStyle(quote).borderLeftStyle, quoteMargin: quote.style.marginLeft,
+      strike: Boolean(box.querySelector('strike')), sup: box.querySelector('sup')?.textContent, centered: [...box.querySelectorAll('div')].find(item => item.textContent === 'Centered')?.style.textAlign,
+      table: ['cellpadding', 'border', 'bgcolor', 'width'].map(name => box.querySelector('table').getAttribute(name)), cell: [box.querySelector('td').getAttribute('align'), box.querySelector('td').getAttribute('valign')],
+      list: [box.querySelector('ol').getAttribute('start'), box.querySelector('ol').getAttribute('type')], tracked: [tracked.style.background, tracked.style.color, tracked.getAttribute('onclick')], scripts: box.querySelectorAll('script').length };
+  }, html);
+  expect(view).toEqual({ color: 'rgb(255, 0, 0)', family: 'georgia, serif', size: '18px', quoteBorder: 'solid', quoteMargin: '0.8ex', strike: true, sup: '2', centered: 'center',
+    table: ['4', '1', '#eeeeee', '100%'], cell: ['right', 'top'], list: ['3', 'a'], tracked: ['', 'blue', null], scripts: 0 });
+});
