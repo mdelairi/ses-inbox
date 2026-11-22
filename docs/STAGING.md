@@ -85,7 +85,7 @@ The toolkit IAM review command for this new runtime source is:
 
 ```sh
 uvx iam-policy-autopilot@latest generate-policies \
-  '~/DEV/SES Inbox App/.audit/stage-entry.js' \
+  .audit/stage-entry.js \
   --region us-east-1 --account 222222222222 \
   --service-hints dynamodb secretsmanager --pretty
 ```
