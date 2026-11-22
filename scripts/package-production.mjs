@@ -13,9 +13,14 @@ execFileSync(process.execPath, [fileURLToPath(new URL('scripts/prepare-live.mjs'
 await rm(output, { recursive: true, force: true });
 await mkdir(new URL('templates/', output), { recursive: true });
 await mkdir(lambda, { recursive: true });
+// The repository's capture trust map holds placeholders. A deployment keeps its real one in the
+// ignored production/capture-sources.json, which replaces the module in the bundle.
+let ownSources = null;
+try { ownSources = JSON.parse(await readFile(new URL('production/capture-sources.json', root))); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+const plugins = ownSources ? [{ name: 'capture-sources', setup(build) { build.onLoad({ filter: /[\\/]mail[\\/]capture-sources\.mjs$/ }, () => ({ contents: `export const captureSources = ${JSON.stringify(ownSources)};`, loader: 'js' })); } }] : [];
 const banner = { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' };
 for (const [entry, file] of [['stage/entry.mjs', 'index.mjs'], ['mail/worker-entry.mjs', 'worker.mjs'], ['mail/maintenance-entry.mjs', 'maintenance.mjs'], ['capture/entry.mjs', 'capture.mjs']]) {
-  await build({ entryPoints: [fileURLToPath(new URL(entry, root))], outfile: fileURLToPath(new URL(file, lambda)), bundle: true, platform: 'node', target: 'node24', format: 'esm', banner, logLevel: 'warning' });
+  await build({ entryPoints: [fileURLToPath(new URL(entry, root))], outfile: fileURLToPath(new URL(file, lambda)), bundle: true, platform: 'node', target: 'node24', format: 'esm', banner, plugins, logLevel: 'warning' });
 }
 await cp(new URL('build/live/assets/', root), new URL('assets/', lambda), { recursive: true });
 await cp(new URL('build/live/assets-manifest.json', root), new URL('assets-manifest.json', lambda));
@@ -29,4 +34,5 @@ for (const [name, template] of Object.entries(templates)) {
 }
 const assets = JSON.parse(await readFile(new URL('build/live/assets-manifest.json', root)));
 await writeFile(new URL('release.json', output), JSON.stringify({ environment: 'production', lambdaSha256, artifactKey: `releases/${lambdaSha256}/lambda.zip`, assets, cloudResourcesCreated: false }, null, 2) + '\n');
+console.log(ownSources ? 'Capture sources: production/capture-sources.json.' : 'Capture sources: repository placeholders (no production/capture-sources.json).');
 console.log(`Packaged build/production/lambda.zip (${zip.length} bytes), key releases/${lambdaSha256}/lambda.zip. Nothing was uploaded or deployed.`);

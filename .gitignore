@@ -20,6 +20,7 @@ client_secret*.json
 # Deployment identity and records for one person's AWS resources (tracked *.example.json show the shape)
 accounts.json
 production/config.json
+production/capture-sources.json
 production/deployment.json
 production/recovery-verification.json
 stage/config.json
