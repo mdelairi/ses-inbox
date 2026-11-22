@@ -16,12 +16,11 @@ input::placeholder, textarea::placeholder { color: #858c91; }
 .thread-row.unread .row-head strong, .unread .row-subject { color: #2c3135; }
 .body-text, .editor { color: #41474c; }
 .editor a { color: #4e5860; text-decoration: underline; }
-.row-snippet, .row-head time, .row-foot, .list-footer,
+.row-head time, .row-foot, .list-footer,
 .preview-label, .eyebrow, .nav-label, .brand span small,
 .list-heading p, .breadcrumb, .count,
 .sender-details .email-address, .sender-details p, .sender-line time,
 .message-position, .toolbar-note, .keyboard-note,
-.collapsed-message strong, .collapsed-message span.preview,
 .dialog-header p, .panel-description, .setting-row p, .alias-card p,
 .form-field, .checkbox-row, .save-status, .attachment small,
 .notification-card p, .notification-card small, .notification-toast p,
@@ -94,7 +93,6 @@ input::placeholder, textarea::placeholder { color: #858c91; }
    text field is 16px so iOS does not zoom the page when it is focused. */
 @media (max-width: 650px) {
   .row-head strong, .row-subject { font-size: 15px; }
-  .row-snippet { font-size: 14px; line-height: 1.5; }
   .row-head time, .row-alias, .row-foot, .bulk-count { font-size: 12px; }
   .tag, .count, .thread-count, .mailbox-tab .count { font-size: 11px; }
   .breadcrumb strong { font-size: 14px; }
@@ -107,7 +105,7 @@ input::placeholder, textarea::placeholder { color: #858c91; }
   .nav-label, .eyebrow, .profile small { font-size: 11px; }
   .domain-meta strong, .profile strong { font-size: 15px; }
   .mailbox-note, .sender-details p, .sender-details .email-address, .sender-line time, .attachment small, .file-chip, .save-status, .compose-footer .save-status { font-size: 13px; }
-  .sender-details strong, .attachment strong, .collapsed-message, .confirm-copy { font-size: 15px; }
+  .sender-details strong, .attachment strong, .confirm-copy { font-size: 15px; }
   .body-text, .editor { font-size: 16px; }
   .compose-field label, .form-field, .remote-notice, .retention-note { font-size: 13px; }
   .dialog-header h2 { font-size: 16px; }
