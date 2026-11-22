@@ -184,9 +184,9 @@ function listHTML() {
 function mailCardHTML(message, collapsed) {
   const sender = `<span class="sender-avatar">${esc(initials(message.fromName))}</span>`;
   const markup = `<div class="sender-line">${sender}<div class="sender-details"><strong>${esc(message.fromName)}<span class="email-address">&lt;${esc(message.from)}&gt;</span></strong><p>to ${esc(message.to.join(', '))}${message.cc?.length ? ` · cc ${esc(message.cc.join(', '))}` : ''}${message.bcc?.length ? ` · bcc ${esc(message.bcc.join(', '))}` : ''}</p>${message.source === 'automated' ? `<p>${esc(message.producer || 'Project mail')} · ${message.environment === 'staging' ? 'Staging' : 'Production'}</p>` : ''}${message.delivery ? `<p>${DELIVERY[message.delivery.state] || esc(message.delivery.state)}${message.delivery.detail ? ` · ${esc(message.delivery.detail)}` : ''}</p>` : ''}${message.quarantined ? '<p>This message failed a virus check. Its attachments are withheld.</p>' : ''}</div><time datetime="${message.date}">${timeFull(message.date)}</time></div>
-    ${message.html ? `${/src\s*=\s*["']https?:/i.test(message.html) && !remoteLoaded.has(message.id) && !state.preferences.externalImages ? `<div class="remote-notice">Remote images are hidden.<button data-action="load-images" data-id="${esc(message.id)}">Load images</button></div>` : ''}<iframe class="message-frame" title="Email from ${esc(message.fromName)}" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" data-message-frame="${esc(message.id)}"></iframe>` : `<div class="body-text">${esc(message.text)}</div>`}
+    ${message.html ? `${/src\s*=\s*["']https?:/i.test(message.html) && !remoteLoaded.has(message.id) && !state.preferences.externalImages ? `<div class="remote-notice">Remote images are hidden.<button data-action="load-images" data-id="${esc(message.id)}">Load images</button></div>` : ''}<iframe class="message-frame" title="Email from ${esc(message.fromName)}" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" data-message-frame="${esc(message.id)}"></iframe>` : `<div class="body-text">${esc(message.text)}</div>`}
     ${message.attachments?.length ? `<div class="attachment-list">${message.attachments.filter(file => !file.inline).map(file => `<button class="attachment" data-action="download" data-message="${esc(message.id)}" data-id="${esc(file.id)}">${icon('drafts')}<span><strong>${esc(file.name)}</strong><small>${prettySize(file.size)} · Download</small></span><span class="download-icon">${icon('download')}</span></button>`).join('')}</div>` : ''}`;
-  return `<article class="message-card" aria-label="Message from ${esc(message.fromName)}">${collapsed ? `<details><summary><span class="collapsed-message">${sender}<strong>${esc(message.fromName)}</strong><span class="preview">${esc(message.text.slice(0, 90))}</span>${icon('chevron')}</span></summary>${markup}</details>` : markup}</article>`;
+  return `<article class="message-card" aria-label="Message from ${esc(message.fromName)}">${collapsed ? `<details><summary><span class="collapsed-message">${sender}<strong>${esc(message.fromName)}</strong><span class="preview">${esc(message.text.slice(0, 90))}</span><time datetime="${message.date}">${timeFull(message.date)}</time>${icon('chevron')}</span></summary>${markup}</details>` : markup}</article>`;
 }
 function readerHTML() {
   const group = selectedGroup();
@@ -198,18 +198,33 @@ function readerHTML() {
     ${view.more ? `<div class="popover-menu">${misplaced([group], activeAddress()) ? `<button data-action="restore">${icon('inbox')}Restore to ${matches.every(item => homeFolder(item, activeAddress()) === 'sent') ? 'Sent' : 'Inbox'}</button>` : ''}<button data-action="spam">${icon('spam')}Move to Spam</button><button data-action="reply-all">${icon('reply')}Reply all</button>${liveMail ? '' : `<button data-action="download-original">${icon('download')}Download sample .eml</button>`}</div>` : ''}
     <div class="reader-scroll"><div class="subject-line"><h2>${esc(group.latest.subject)}</h2></div><div class="reader-labels"><span class="recipient-badge">${esc(activeAddress())}</span>${tags(group.latest)}${group.latest.status === 'sample' && group.latest.folder === 'sent' ? '<span class="tag">Sample message</span>' : ''}</div>
     ${trash ? '<div class="retention-note">This conversation is in Trash. It will stay here until you explicitly delete it permanently. <button class="text-button" data-action="restore">Restore</button></div>' : ''}
+    ${messages.length > 1 ? `<p class="thread-note">${messages.length} messages · oldest first, latest open at the bottom</p>` : ''}
     ${messages.map((item, i) => mailCardHTML(item, i < messages.length - 1)).join('')}
     <div class="reply-actions"><button class="secondary-button" data-action="reply" ${canCompose() ? '' : 'disabled'}>${icon('reply')}Reply</button><button class="secondary-button" data-action="forward" ${canCompose() ? '' : 'disabled'}>${icon('forward')}Forward</button></div></div></section>`;
 }
+// The frame runs no scripts but shares the app's origin, so the app can read how tall the
+// message really is and the reading pane scrolls it as one page.
+let frameSizes;
+function fitFrame(frame) {
+  const page = frame.contentDocument, body = page?.body;
+  if (!body || !frame.clientWidth) return;
+  page.documentElement.style.overflowY = 'hidden';
+  const bar = frame.contentWindow.innerHeight - page.documentElement.clientHeight;
+  frame.style.minHeight = '0'; frame.style.height = `${Math.ceil(Math.max(body.scrollHeight, body.getBoundingClientRect().height)) + bar + 2}px`;
+}
 function mountFrames() {
+  frameSizes?.disconnect();
+  frameSizes = new ResizeObserver(entries => { for (const entry of entries) { const frame = entry.target.ownerDocument.defaultView?.frameElement; if (frame) fitFrame(frame); } });
   root.querySelectorAll('[data-message-frame]').forEach(frame => {
     const message = state.messages.find(item => item.id === frame.dataset.messageFrame && item.domain === state.selectedDomain);
-    // The sandboxed frame cannot report its height, so estimate wrapped lines at its actual width.
     if (message) {
-      frame.srcdoc = messageDocument(message.html, remoteLoaded.has(message.id) || state.preferences.externalImages);
+      // A first estimate from the wrapped lines, replaced by the measured height once the frame loads.
       const narrow = frame.clientWidth <= 600, perLine = Math.max(28, Math.floor(frame.clientWidth / (narrow ? 8.5 : 7.5)));
       const lines = (message.text || htmlText(message.html)).split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / perLine)), 0);
       frame.style.height = `${Math.max(250, Math.min(6000, 140 + lines * (narrow ? 28 : 26)))}px`;
+      // Images and a change of width alter the height after loading.
+      frame.addEventListener('load', () => { fitFrame(frame); if (frame.contentDocument?.body) frameSizes.observe(frame.contentDocument.body); });
+      frame.srcdoc = messageDocument(message.html, remoteLoaded.has(message.id) || state.preferences.externalImages);
     }
   });
 }

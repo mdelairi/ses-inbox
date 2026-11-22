@@ -55,6 +55,24 @@ test('compose with formatting, inline image, file attachment and local send pers
   await page.reload(); await folder(page, 'Sent'); await expect(page.getByRole('button', { name: 'Open Prototype flow check', exact: true })).toBeVisible();
 });
 
+test('a long message scrolls in the reading pane and conversations show their order', async ({ page }) => {
+  await page.getByRole('button', { name: 'Compose', exact: true }).click();
+  await page.locator('#compose-to').fill('someone@example.net'); await page.locator('#compose-subject').fill('A very long note');
+  await page.getByRole('textbox', { name: 'Message body' }).fill(Array.from({ length: 150 }, (_, i) => `Line ${i + 1}`).join('\n'));
+  await page.getByRole('button', { name: 'Send locally', exact: true }).click(); await folder(page, 'Sent');
+  await page.getByRole('button', { name: 'Open A very long note', exact: true }).click();
+  const frame = page.frameLocator('.message-frame'); await expect(frame.getByText('Line 150', { exact: true })).toBeAttached();
+  // The frame is as tall as its message, and the pane (not the page or the frame) scrolls it.
+  await expect.poll(async () => Math.abs(await page.locator('.message-frame').evaluate(el => el.clientHeight - el.contentDocument.body.scrollHeight))).toBeLessThan(8);
+  const pane = await page.locator('.reader-scroll').evaluate(el => ({ box: el.clientHeight, content: el.scrollHeight, bottom: el.getBoundingClientRect().bottom, view: innerHeight }));
+  expect(pane.content).toBeGreaterThan(pane.box + 1000); expect(pane.bottom).toBeLessThanOrEqual(pane.view);
+  await page.getByRole('button', { name: 'Reply', exact: true }).last().scrollIntoViewIfNeeded(); await expect(frame.getByText('Line 150', { exact: true })).toBeInViewport();
+  await folder(page, 'Inbox'); await mailbox(page, 'taylor@example.com');
+  await page.getByRole('button', { name: 'Open A conversation about the next workshop', exact: true }).click();
+  await expect(page.locator('.thread-note')).toContainText('2 messages · oldest first');
+  await expect(page.locator('.collapsed-message time')).toHaveCount(1);
+});
+
 test('archive undo and permanent deletion stay within the selected domain', async ({ page }) => {
   await mailbox(page, 'taylor@example.com');
   await page.getByRole('button', { name: 'Open A note about your book', exact: true }).click(); await page.getByRole('button', { name: 'Archive conversation' }).click();

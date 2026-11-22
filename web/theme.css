@@ -237,3 +237,9 @@ input::placeholder, textarea::placeholder { color: #858c91; }
   .settings-panel .tag { font-size: 13px; padding: 3px 8px; }
   .alias-card .alias-tags { margin-top: 7px; }
 }
+.thread-note { font-size: 11px; color: #7c8489; margin: -14px 0 14px; }
+.collapsed-message time { margin-left: auto; font-size: 11px; color: #7c8489; white-space: nowrap; }
+/* Rows may not grow with their content, so a long conversation scrolls inside the reading pane instead of being clipped. */
+.app-shell, .mail-layout { grid-template-rows: minmax(0, 1fr); }
+.workspace { min-height: 0; }
+.reader-scroll, .thread-list { scrollbar-color: #b4bcc1 transparent; }

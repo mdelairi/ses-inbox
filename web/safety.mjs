@@ -30,7 +30,8 @@ export function sanitizeHTML(value, { allowRemote = false } = {}) {
     if (tag === 'img') {
       const src = node.getAttribute('src') || '';
       const local = /^data:image\/(png|jpeg|gif|webp);base64,/i.test(src);
-      const remote = allowRemote && /^https:\/\//i.test(src);
+      // Never this app's own host: the frame shares its origin, so such a request would carry the session.
+      const remote = allowRemote && /^https:\/\//i.test(src) && safeLink(src) && new URL(src).host !== location.host;
       if (!local && !remote) { result.setAttribute('alt', node.getAttribute('alt') || 'Image hidden'); } else result.setAttribute('src', src);
       result.setAttribute('alt', node.getAttribute('alt') || 'Inline image');
       if (/^[a-z0-9-]{1,80}$/i.test(node.getAttribute('data-file-id') || '')) result.setAttribute('data-file-id', node.getAttribute('data-file-id'));
