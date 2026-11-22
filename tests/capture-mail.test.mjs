@@ -91,6 +91,18 @@ test('trusted prefixes determine environment; forbidden sender/kind and malforme
   assert.deepEqual(await worker({ Records: [{ messageId: 'bad', body: JSON.stringify({ Records: [{ eventSource: 'aws:s3', s3: { bucket: { name: 'other' }, object: { key } } }] }) }] }), { batchItemFailures: [{ itemIdentifier: 'bad' }] });
   assert.equal((await db.pool.query('SELECT count(*)::int AS n FROM mail.messages')).rows[0].n, 0);
 });
+test('an import that overlaps another waits briefly instead of failing into the queue', async () => {
+  const id = randomUUID(), body = JSON.stringify({ Records: [{ eventSource: 'aws:s3', s3: { bucket: { name: 'capture-bucket' }, object: { key: `capture/exampleorg-staging/${id}/message.json` } } }] });
+  const waits = [], make = busyFor => { let calls = 0; return createCaptureWorker({ captureBucket: 'capture-bucket', log: () => {}, warn: () => {}, wait: async ms => { waits.push(ms); },
+    importer: { ingest: async () => { if (calls++ < busyFor) throw new Error('CaptureImportBusy'); return { published: true }; }, recordEvent: async () => { throw Object.assign(new Error('conflict'), { code: 'OC000' }); } } }); };
+  assert.deepEqual(await make(2)({ Records: [{ messageId: 'overlap', body }] }), { batchItemFailures: [] });
+  assert.deepEqual(waits, [500, 1000]);
+  // An import that stays busy, and a persistent write conflict, still fail visibly once the waits run out.
+  waits.length = 0;
+  assert.deepEqual(await make(99)({ Records: [{ messageId: 'stuck', body }] }), { batchItemFailures: [{ itemIdentifier: 'stuck' }] });
+  assert.deepEqual(waits, [500, 1000, 2000, 4000]);
+  assert.deepEqual(await make(0)({ Records: [{ messageId: 'event', body: JSON.stringify({ Type: 'Notification', TopicArn: topic, Message: '{}' }) }] }), { batchItemFailures: [{ itemIdentifier: 'event' }] });
+});
 test('capture buffer physically expires every version, including current and incomplete captures', async () => {
   let now = Date.now(); const objects = versionedObjects(() => now);
   await objects.put('capture/test/old/message.json', 'private'); await objects.put('capture/test/old/message.json', 'old version');

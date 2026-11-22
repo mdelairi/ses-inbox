@@ -156,3 +156,4 @@ export async function sendDraft() { throw new Error('Sending is not available in
 // The sample stage has no forwarding or push enrollment.
 export const forwarding = null;
 export const notifications = null;
+export const olderMail = null;

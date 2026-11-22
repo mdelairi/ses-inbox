@@ -45,6 +45,14 @@ test('entries list every alias with metadata; search reports matched ids; drafts
   assert.deepEqual(entries.map(item => `${item.mailbox}:${item.subject}`).sort(), ['info@example.com:Shared quote', 'info@example.org:Other domain', 'taylor@example.com:Shared quote']);
   assert.equal(entries.find(item => item.mailbox === 'info@example.com').domain, 'example.com');
   assert.equal('text' in entries[0], false);
+  // Pages follow a cursor without repeating or skipping, even where one message is two entries.
+  const seen = []; let cursor, pages = 0;
+  do { const page = await t.call('/api/mail/entries', { limit: 1, cursor }); assert.equal(page.entries.length, 1); assert.equal(page.truncated, Boolean(page.cursor)); seen.push(`${page.entries[0].mailbox}:${page.entries[0].subject}`); cursor = page.cursor; pages++; } while (cursor);
+  assert.equal(pages, 3); assert.deepEqual(seen.sort(), entries.map(item => `${item.mailbox}:${item.subject}`).sort());
+  await assert.rejects(t.call('/api/mail/entries', { cursor: 'nonsense' }), /Invalid page cursor/);
+  const byId = await t.call('/api/mail/entries/ids', { mailbox: 'taylor@example.com', ids: [shared.messageId] });
+  assert.deepEqual(byId.entries.map(item => `${item.mailbox}:${item.domain}:${item.subject}`), ['taylor@example.com:example.com:Shared quote']);
+  assert.deepEqual((await t.call('/api/mail/entries/ids', { mailbox: 'info@example.org', ids: [shared.messageId] })).entries, []);
   assert.deepEqual((await t.call('/api/mail/search', { mailbox: 'info@example.com', query: 'quote' })).ids, [shared.messageId]);
   const id = randomUUID();
   await t.call('/api/mail/draft/save', { mailbox: 'info@example.com', id, revision: 0, draft: { to: 'half-typed@exa', subject: 'x' } });

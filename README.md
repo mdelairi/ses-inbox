@@ -38,6 +38,7 @@ Things to try: switch between the two workspaces and their addresses; reply, for
 - **Automated Sent capture.** Mail that other systems send on the domains' behalf (a website contact form, a product's invitation emails) is captured into the owner's Sent folder through a source-scoped, write-only intake — producers get an exact S3 prefix and nothing else.
 - **Owner-only access.** CloudFront (OAC, SigV4) → Lambda function URL (IAM auth) → a Google sign-in gateway restricted to one account. The direct function URL returns 403.
 - **A PWA with Web Push.** New Inbox mail sends a sender/subject notification to every enrolled device and can forward a copy to outside addresses, at most once per target.
+- **Mail in pages.** The client loads the newest 5,000 entries and brings in older pages at the end of a list; search runs on the server and fetches results older than the loaded pages.
 - **Conversations as a tree.** The message list shows sender, subject and time only. An open conversation lists its messages beneath it, oldest first; the reading pane shows the one you pick, with Reply as its leading button.
 - **Email HTML is treated as hostile.** Active content is stripped and rich messages render inside sandboxed frames that run no scripts. A frame shares the app's origin only so its height can be measured, and images on the app's own host are refused.
 

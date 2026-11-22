@@ -2,7 +2,7 @@
 // in-memory store behind a routed origin; SES is a recorder. Nothing leaves this machine.
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createStageHandler, hash, sessionCookie } from '../../stage/auth.mjs';
 import { createMailApi } from '../../mail/api.mjs';
 import { createPush } from '../../mail/push.mjs';
@@ -23,7 +23,7 @@ let db;
 test.beforeAll(async () => { execFileSync(process.execPath, [new URL('../../scripts/prepare-live.mjs', import.meta.url).pathname.replaceAll('%20', ' ')]); db = await startPostgres(); });
 test.afterAll(async () => { await db?.stop(); });
 
-async function live(context, page, seed = async () => {}) {
+async function live(context, page, seed = async () => {}, { pageSize } = {}) {
   const f = await mailFixture(db), sent = [], pushed = [];
   await seed(f);
   const objects = { ...f.objects, downloadUrl: async key => `${storageOrigin}/${key}`,
@@ -49,7 +49,9 @@ async function live(context, page, seed = async () => {}) {
   });
   await page.route(`${origin}/**`, async route => {
     const request = route.request(), url = new URL(request.url());
-    const result = await handler({ rawPath: url.pathname, rawQueryString: url.search.slice(1), headers: await request.allHeaders(), body: request.postData(), requestContext: { http: { method: request.method() } } });
+    // A small page size stands in for a mailbox larger than one real page.
+    const body = pageSize && url.pathname === '/api/mail/entries' ? JSON.stringify({ ...JSON.parse(request.postData()), limit: pageSize }) : request.postData();
+    const result = await handler({ rawPath: url.pathname, rawQueryString: url.search.slice(1), headers: { ...await request.allHeaders(), ...(body === request.postData() ? {} : { 'x-amz-content-sha256': createHash('sha256').update(body).digest('hex') }) }, body, requestContext: { http: { method: request.method() } } });
     await route.fulfill({ status: result.statusCode, headers: result.headers, body: result.isBase64Encoded ? Buffer.from(result.body, 'base64') : result.body });
   });
   await context.addCookies([{ name: sessionCookie, value, domain: 'inbox-live.invalid', path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
@@ -142,6 +144,29 @@ test('real mail: notification settings list devices and send a test', async ({ c
   expect(t.pushed).toEqual([{ title: 'Inbox', body: 'Notifications are working on this device.', tag: 'inbox-test', url: '/' }]);
   await page.locator('.settings-panel').getByRole('button', { name: 'Remove' }).click();
   await expect(page.locator('.settings-panel')).toContainText('No devices yet.');
+});
+
+test('real mail: older mail loads a page at a time, and search shows results older than the loaded pages', async ({ context, page }) => {
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await live(context, page, async f => {
+    await f.deliver(['info@example.com'], { subject: 'Oldest note', text: 'The archive mentions heliotrope.' });
+    await f.deliver(['info@example.com'], { subject: 'Middle note', text: 'Nothing special.' });
+    await f.deliver(['info@example.com'], { subject: 'Newest note', text: 'Nothing special.' });
+  }, { pageSize: 2 });
+  await expect(page.getByRole('button', { name: 'Open Newest note', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Open Middle note', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open Oldest note', exact: true })).toHaveCount(0);
+  // Search finds the message on the server and fetches it although its page was never loaded.
+  await page.getByRole('searchbox', { name: 'Search current mailbox' }).fill('heliotrope');
+  await expect(page.getByRole('button', { name: 'Open Oldest note', exact: true })).toBeVisible(); await expect(page.locator('.thread-row')).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Open Newest note', exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Open Oldest note', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Load older mail', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Open Oldest note', exact: true })).toBeVisible(); await expect(page.locator('.thread-row')).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Load older mail', exact: true })).toHaveCount(0);
+  // The older message behaves like any other: opening it marks it read on the server.
+  await page.getByRole('button', { name: 'Open Oldest note', exact: true }).click();
+  await expect.poll(async () => (await db.pool.query("SELECT e.is_read FROM mail.mailbox_entries e JOIN mail.messages m USING (domain_id, message_id) WHERE m.subject='Oldest note'")).rows[0].is_read).toBe(true);
+  expect(errors).toEqual([]);
 });
 
 test('real mail: select several conversations to mark, move and forward them together', async ({ context, page }) => {

@@ -22,6 +22,13 @@ function decodeCursor(cursor) {
   try { const value = JSON.parse(Buffer.from(cursor, 'base64url')); uuid(value.thread); if (Number.isNaN(Date.parse(value.latest))) throw 0; return value; } catch { fail('Invalid page cursor'); }
 }
 
+// One page of entries; the cursor names the last entry so the next page starts after it.
+function entryPage(rows, limit) {
+  const page = rows.slice(0, limit), last = page.at(-1), more = rows.length > limit;
+  return { entries: page.map(row => ({ ...summary(row), domain: row.domain, mailbox: row.mailbox })), truncated: more,
+    cursor: more ? encodeCursor({ at: utc(last.received_at), id: last.message_id, alias: last.alias_id }) : null };
+}
+
 // Every operation is scoped to one resolved alias; message ids alone never authorize access.
 export function createMailbox({ pool, objects }) {
   async function alias(address) {
@@ -47,12 +54,31 @@ export function createMailbox({ pool, objects }) {
       return rows.map(row => ({ address: row.address, name: row.display_name, domain: row.domain, domainLabel: row.label, receiveEnabled: row.receive_enabled, sendEnabled: row.send_enabled, default: row.is_default, signature: row.signature }));
     },
 
-    // Every mailbox entry with message metadata (no bodies), newest first and bounded.
-    async entries({ limit = 5000 } = {}) {
+    // Entries of one mailbox by message id, for search results older than the loaded pages.
+    async entriesById({ mailbox, ids }) {
+      if (!Array.isArray(ids) || !ids.length || ids.length > 500) fail('Choose 1..500 messages');
+      const scope = await alias(mailbox);
+      const { rows } = await pool.query(`SELECT ${MESSAGE_COLUMNS} FROM mail.mailbox_entries e JOIN mail.messages m ON m.domain_id=e.domain_id AND m.message_id=e.message_id
+        WHERE e.domain_id=$1 AND e.alias_id=$2 AND e.message_id IN (${placeholders(ids, 2)}) ORDER BY e.received_at DESC, e.message_id DESC`, [scope.domainId, scope.aliasId, ...ids.map(uuid)]);
+      return { entries: rows.map(row => ({ ...summary(row), domain: scope.domain, mailbox: scope.address })) };
+    },
+
+    // Every mailbox entry with message metadata (no bodies), newest first, one bounded page at a time.
+    async entries({ limit = 5000, cursor } = {}) {
       if (!Number.isInteger(limit) || limit < 1 || limit > 5000) fail('Limit must be 1..5000');
-      const { rows } = await pool.query(`SELECT ${MESSAGE_COLUMNS}, a.address AS mailbox, d.name AS domain FROM mail.mailbox_entries e JOIN mail.messages m ON m.domain_id=e.domain_id AND m.message_id=e.message_id
-        JOIN mail.aliases a ON a.domain_id=e.domain_id AND a.alias_id=e.alias_id JOIN mail.domains d ON d.domain_id=e.domain_id ORDER BY e.received_at DESC, e.message_id DESC LIMIT $1`, [limit + 1]);
-      return { entries: rows.slice(0, limit).map(row => ({ ...summary(row), domain: row.domain, mailbox: row.mailbox })), truncated: rows.length > limit };
+      let after = null;
+      if (cursor) { try { after = JSON.parse(Buffer.from(cursor, 'base64url')); uuid(after.id); uuid(after.alias); if (Number.isNaN(Date.parse(after.at))) throw 0; } catch { fail('Invalid page cursor'); } }
+      if (after) {
+        // A message filed under two addresses is two entries with one time, so the address breaks the tie.
+        const { rows } = await pool.query(`SELECT ${MESSAGE_COLUMNS}, e.alias_id, a.address AS mailbox, d.name AS domain FROM mail.mailbox_entries e JOIN mail.messages m ON m.domain_id=e.domain_id AND m.message_id=e.message_id
+          JOIN mail.aliases a ON a.domain_id=e.domain_id AND a.alias_id=e.alias_id JOIN mail.domains d ON d.domain_id=e.domain_id
+          WHERE e.received_at < $1::timestamp OR (e.received_at = $1::timestamp AND (e.message_id < $2::uuid OR (e.message_id = $2::uuid AND e.alias_id < $3::uuid)))
+          ORDER BY e.received_at DESC, e.message_id DESC, e.alias_id DESC LIMIT $4`, [after.at, after.id, after.alias, limit + 1]);
+        return entryPage(rows, limit);
+      }
+      const { rows } = await pool.query(`SELECT ${MESSAGE_COLUMNS}, e.alias_id, a.address AS mailbox, d.name AS domain FROM mail.mailbox_entries e JOIN mail.messages m ON m.domain_id=e.domain_id AND m.message_id=e.message_id
+        JOIN mail.aliases a ON a.domain_id=e.domain_id AND a.alias_id=e.alias_id JOIN mail.domains d ON d.domain_id=e.domain_id ORDER BY e.received_at DESC, e.message_id DESC, e.alias_id DESC LIMIT $1`, [limit + 1]);
+      return entryPage(rows, limit);
     },
 
     // Conversations are paged by their latest message in the folder, never as loose messages.

@@ -1,6 +1,6 @@
 import { seedState } from './fixtures.mjs';
 import { FOLDERS, MAX_FILE_BYTES, MAX_TOTAL_BYTES, domainOf, aliasesOf, defaultAlias, createSearchIndex, visibleThreads, conversation, mailboxEntries, inMailbox, setMailboxState, mailboxesOf, selectedMailbox, sendLocally, moveMessages, permanentlyDelete, saveAlias } from './model.mjs';
-import { loadState, persistState, sharedStorage, hasUnsavedChanges, storageActions, liveMail, loadConversation, searchMail, attachmentUrl, sendDraft, forwarding, notifications } from './local-db.mjs';
+import { loadState, persistState, sharedStorage, hasUnsavedChanges, storageActions, liveMail, loadConversation, searchMail, attachmentUrl, sendDraft, forwarding, notifications, olderMail } from './local-db.mjs';
 import { escapeHTML as esc, sanitizeHTML, safeLink, htmlText, messageDocument } from './safety.mjs';
 
 const paths = {
@@ -75,7 +75,13 @@ const forwardRules = new Map();
 const remoteLoaded = new Set();
 // Live mail searches on the server; results are cached per query for the selected mailbox.
 const searchCache = new Map();
-let searchTimer;
+let searchTimer, loadingOlder = false;
+async function loadOlderMail() {
+  if (loadingOlder || !olderMail?.more()) return;
+  loadingOlder = true; render();
+  try { await olderMail.load(state); } catch (error) { toast(error.message, { error: true }); }
+  loadingOlder = false; render();
+}
 const uid = () => crypto.randomUUID();
 // The signed-in account (set by the session client) when there is one; the sample owner in the local prototype.
 const profileName = () => document.documentElement.dataset.account || (liveMail ? activeAddress() : 'Taylor Example');
@@ -102,7 +108,7 @@ function scheduleSearch() {
   const query = view.query.trim(), address = activeAddress();
   if (!liveMail || !query || searchCache.has(query)) return;
   searchTimer = setTimeout(async () => {
-    try { searchCache.set(query, await searchMail(address, query)); } catch (error) { toast(error.message, { error: true }); return; }
+    try { const found = await searchMail(address, query); if (olderMail && found) await olderMail.find(state, address, [...found]); searchCache.set(query, found); } catch (error) { toast(error.message, { error: true }); return; }
     if (view.query.trim() === query && activeAddress() === address) render();
   }, 300);
 }
@@ -187,7 +193,7 @@ function listHTML() {
   view.checked = view.checked.filter(id => groups.some(group => group.id === id));
   const count = draftView ? drafts.length : groups.length;
   const title = view.query ? 'Search results' : folderNames[view.folder];
-  return `<section class="message-list" aria-label="${esc(title)} message list">${mailboxTabsHTML()}<div class="list-heading"><div><h1>${title}</h1><p>${view.query ? `“${esc(view.query)}” · ` : ''}${count} ${draftView ? count === 1 ? 'draft' : 'drafts' : count === 1 ? 'conversation' : 'conversations'}${!draftView && view.folder === 'inbox' && !view.query ? ' · this address only' : ''}</p></div>${buttons('refresh', liveMail ? 'Check for new mail' : 'Refresh local preview', 'refresh')}</div>${draftView ? '' : view.checked.length ? bulkHTML(groups) : filterHTML(groups)}<div class="thread-list">${draftView ? drafts.map(draftRowHTML).join('') : groups.map(rowHTML).join('')}${!count ? `<div class="empty-list">${icon(view.query ? 'search' : folderIcons[view.folder])}<strong>${view.query ? 'No matching conversations' : draftView ? 'A little room for your next thought' : `Nothing in ${folderNames[view.folder]}`}</strong><p>${view.query ? 'Try another word or clear your filters.' : draftView ? 'Your unfinished messages will be kept here.' : view.folder === 'trash' ? 'Mail stays here until you delete it permanently.' : 'You’re all caught up here.'}</p>${view.query || view.alias || view.source || view.environment || view.unread ? '<button class="text-button" data-action="reset-view">Clear search & filters</button>' : ''}</div>` : ''}</div><div class="list-footer"><span>${liveMail ? '' : 'Sample mail · '}${esc(activeAddress())}</span></div></section>`;
+  return `<section class="message-list" aria-label="${esc(title)} message list">${mailboxTabsHTML()}<div class="list-heading"><div><h1>${title}</h1><p>${view.query ? `“${esc(view.query)}” · ` : ''}${count} ${draftView ? count === 1 ? 'draft' : 'drafts' : count === 1 ? 'conversation' : 'conversations'}${!draftView && view.folder === 'inbox' && !view.query ? ' · this address only' : ''}</p></div>${buttons('refresh', liveMail ? 'Check for new mail' : 'Refresh local preview', 'refresh')}</div>${draftView ? '' : view.checked.length ? bulkHTML(groups) : filterHTML(groups)}<div class="thread-list">${draftView ? drafts.map(draftRowHTML).join('') : groups.map(rowHTML).join('') + (olderMail?.more() ? `<div class="load-older"><button class="text-button" data-action="load-older" ${loadingOlder ? 'disabled' : ''}>${loadingOlder ? 'Loading older mail…' : 'Load older mail'}</button></div>` : '')}${!count ? `<div class="empty-list">${icon(view.query ? 'search' : folderIcons[view.folder])}<strong>${view.query ? 'No matching conversations' : draftView ? 'A little room for your next thought' : `Nothing in ${folderNames[view.folder]}`}</strong><p>${view.query ? 'Try another word or clear your filters.' : draftView ? 'Your unfinished messages will be kept here.' : view.folder === 'trash' ? 'Mail stays here until you delete it permanently.' : 'You’re all caught up here.'}</p>${view.query || view.alias || view.source || view.environment || view.unread ? '<button class="text-button" data-action="reset-view">Clear search & filters</button>' : ''}</div>` : ''}</div><div class="list-footer"><span>${liveMail ? '' : 'Sample mail · '}${esc(activeAddress())}</span></div></section>`;
 }
 function mailCardHTML(message) {
   const sender = `<span class="sender-avatar">${esc(initials(message.fromName))}</span>`;
@@ -245,6 +251,8 @@ function render() {
   root.innerHTML = `<div class="app-shell${view.selected ? ' has-selection' : ''}${view.checked.length ? ' has-checked' : ''}${view.mobileSidebar ? ' sidebar-open' : ''}"><button class="mobile-backdrop" data-action="close-sidebar" aria-label="Close navigation"></button>${sidebarHTML()}<main class="workspace">${topbarHTML()}<div class="mail-layout">${listHTML()}${readerHTML()}</div><button class="mobile-compose" data-action="compose" aria-label="Compose" ${canCompose() ? '' : 'disabled'}>${icon('plus')}Compose</button></main></div>`;
   const all = root.querySelector('#check-all'); if (all) all.indeterminate = all.dataset.partial === 'true';
   const list = root.querySelector('.thread-list'); if (list) list.scrollTop = listScroll;
+  // Reaching the end of the list brings in the next page of older mail.
+  if (list && olderMail?.more()) list.onscroll = () => { if (list.scrollTop + list.clientHeight > list.scrollHeight - 200) void loadOlderMail(); };
   mountFrames(); document.title = `${view.query ? 'Search' : folderNames[view.folder]} · ${activeAddress()}`;
 }
 
@@ -508,6 +516,7 @@ document.addEventListener('click', async event => {
       case 'resume-draft': openComposer({ draftId: id }); break;
       case 'open-thread': await openThread(thread); break;
       case 'back': view.selected = null; render(); break;
+      case 'load-older': await loadOlderMail(); break;
       case 'open-message': view.message = id; view.more = false; render(); break;
       case 'step-message': { const messages = currentConversation(), shown = shownMessage(), next = messages[messages.findIndex(item => item.id === shown?.id) + Number(element.dataset.step)]; if (next) { view.message = next.id; view.more = false; render(); } break; }
       case 'show-all': view.unread = false; render(); break;

@@ -276,3 +276,4 @@ input::placeholder, textarea::placeholder { color: #858c91; }
   .reader-actions [data-action="reply"] .bar-label { display: inline; }
   .reader-actions [data-action="reply"] svg { color: #fff; }
 }
+.load-older { padding: 14px 16px 18px; text-align: center; border-bottom: 1px solid #efefeb; }

@@ -36,6 +36,10 @@ export function storageActions(notice) {
   notice.append(document.createTextNode(' '), reload);
 }
 
+const PAGE = 5000;
+let olderCursor = null, pagesLoaded = 1;
+const messageOf = entry => ({ id: entry.id, domain: entry.domain, thread: entry.thread, fromName: entry.fromName || entry.from, from: entry.from, to: entry.to, cc: entry.cc, subject: entry.subject || '(No subject)', text: entry.snippet, html: '', date: entry.date,
+  source: entry.source, environment: entry.environment, hasAttachments: entry.hasAttachments, quarantined: entry.quarantined, attachments: [], mailboxes: {}, loaded: false });
 const entryKey = (domain, id, address) => `${domain}\u0000${id}\u0000${address}`;
 function entrySnapshot(messages) {
   const map = new Map();
@@ -84,7 +88,11 @@ async function decodeDraft(wire) {
 
 export async function loadState() {
   if (dirty) throw new Error('Some changes are still being saved. Try again in a moment.');
-  const [aliases, { entries, truncated }] = await Promise.all([call('/api/mail/mailboxes'), call('/api/mail/entries')]);
+  const [aliases, first] = await Promise.all([call('/api/mail/mailboxes'), call('/api/mail/entries', { limit: PAGE })]);
+  // A reload keeps as many pages as were already showing, so older mail does not vanish from the list.
+  const entries = [...first.entries]; let cursor = first.cursor;
+  for (let page = 1; page < pagesLoaded && cursor; page++) { const next = await call('/api/mail/entries', { limit: PAGE, cursor }); entries.push(...next.entries); cursor = next.cursor; }
+  olderCursor = cursor;
   const domains = new Map();
   for (const alias of aliases) {
     if (!domains.has(alias.domain)) domains.set(alias.domain, { id: alias.domain, name: alias.domainLabel, initial: alias.domainLabel.slice(0, 1).toUpperCase(), color: COLORS[alias.domain] || '#426859', aliases: [] });
@@ -93,8 +101,7 @@ export async function loadState() {
   const messages = new Map();
   for (const entry of entries) {
     const key = `${entry.domain}\u0000${entry.id}`;
-    if (!messages.has(key)) messages.set(key, { id: entry.id, domain: entry.domain, thread: entry.thread, fromName: entry.fromName || entry.from, from: entry.from, to: entry.to, cc: entry.cc, subject: entry.subject || '(No subject)', text: entry.snippet, html: '', date: entry.date,
-      source: entry.source, environment: entry.environment, hasAttachments: entry.hasAttachments, quarantined: entry.quarantined, attachments: [], mailboxes: {}, loaded: false });
+    if (!messages.has(key)) messages.set(key, messageOf(entry));
     messages.get(key).mailboxes[entry.mailbox] = { folder: entry.folder, read: entry.read };
   }
   const drafts = [];
@@ -112,9 +119,36 @@ export async function loadState() {
   const state = { schema: 1, domains: [...domains.values()], messages: [...messages.values()], drafts, deleted: [], preferences,
     selectedDomain: domains.has(navigation.selectedDomain) ? navigation.selectedDomain : [...domains.keys()][0], selectedMailboxes: navigation.selectedMailboxes || {} };
   entryBaseline = entrySnapshot(state.messages);
-  if (truncated) window.dispatchEvent(new CustomEvent('inbox:storage-error', { detail: new Error('Showing the newest 5,000 messages. Use search to find older mail.') }));
   return state;
 }
+
+// Mail arrives one page at a time, newest first. Older pages are added to the loaded state on
+// request, and a search result older than every loaded page is fetched by its id.
+function addEntries(state, entries) {
+  const known = new Map(state.messages.map(message => [`${message.domain}\u0000${message.id}`, message]));
+  for (const entry of entries) {
+    const key = `${entry.domain}\u0000${entry.id}`;
+    if (!known.has(key)) { known.set(key, messageOf(entry)); state.messages.push(known.get(key)); }
+    const message = known.get(key);
+    if (message.mailboxes[entry.mailbox]) continue; // already showing, possibly with a change not yet saved
+    message.mailboxes[entry.mailbox] = { folder: entry.folder, read: entry.read };
+    entryBaseline.set(entryKey(entry.domain, entry.id, entry.mailbox), { folder: entry.folder, read: Boolean(entry.read) });
+  }
+}
+export const olderMail = {
+  more: () => Boolean(olderCursor),
+  async load(state) {
+    if (!olderCursor) return;
+    const page = await call('/api/mail/entries', { limit: PAGE, cursor: olderCursor });
+    addEntries(state, page.entries); olderCursor = page.cursor; pagesLoaded++;
+  },
+  async find(state, address, ids) {
+    const missing = ids.filter(id => !state.messages.some(message => message.id === id && message.mailboxes[address])).slice(0, 500);
+    if (!missing.length) return false;
+    addEntries(state, (await call('/api/mail/entries/ids', { mailbox: address, ids: missing })).entries);
+    return true;
+  },
+};
 
 // Folder and read changes become state calls; entries removed from Trash become deletions.
 export async function persistState(state) {
