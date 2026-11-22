@@ -61,7 +61,7 @@ test('real mail: read with inline images, reply, archive, and server search', as
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   const t = await live(context, page, f => f.deliver(['info@example.com'], { subject: 'Workshop dates', messageId: '<workshop@example.net>', text: 'Can we meet about invoices?',
     html: '<p>Can we meet about <b>invoices</b>?</p><img src="cid:logo@x" alt="Logo">', attachments: [{ filename: 'brief.pdf', content: Buffer.from('%PDF-1'), contentType: 'application/pdf' }, { filename: 'logo.png', content: PNG, cid: 'logo@x', contentType: 'image/png' }] }));
-  await expect(page.locator('.profile small')).toHaveText('Live mail');
+  await expect(page.locator('.profile small')).toHaveText('Live mail'); await expect(page.locator('.profile strong')).toHaveText('owner@example.net');
   await page.getByRole('button', { name: 'Open Workshop dates', exact: true }).click();
   const frame = page.frameLocator('.message-frame');
   await expect(frame.locator('b')).toHaveText('invoices');

@@ -237,9 +237,33 @@ input::placeholder, textarea::placeholder { color: #858c91; }
   .settings-panel .tag { font-size: 13px; padding: 3px 8px; }
   .alias-card .alias-tags { margin-top: 7px; }
 }
-.thread-note { font-size: 11px; color: #7c8489; margin: -14px 0 14px; }
-.collapsed-message time { margin-left: auto; font-size: 11px; color: #7c8489; white-space: nowrap; }
 /* Rows may not grow with their content, so a long conversation scrolls inside the reading pane instead of being clipped. */
 .app-shell, .mail-layout { grid-template-rows: minmax(0, 1fr); }
 .workspace { min-height: 0; }
 .reader-scroll, .thread-list { scrollbar-color: #b4bcc1 transparent; }
+/* Mail rows show sender, time, subject and address only; the body is read in the pane. */
+.thread-item .thread-row { min-height: 0; padding-top: 14px; padding-bottom: 12px; }
+.thread-item .row-head { margin-bottom: 4px; }
+.thread-item .row-subject { margin-bottom: 5px; }
+.thread-item .row-check { padding-top: 15px; }
+.thread-item .unread-dot { top: 21px; }
+/* The open conversation shrinks to one subject line, and its messages hang beneath it on connecting lines. */
+.thread-item .thread-row.expanded { padding-bottom: 8px; border-bottom: 0; }
+.thread-row.expanded .row-head, .thread-row.expanded .row-foot { display: none; }
+.thread-item .row-subject { display: flex; align-items: center; }
+.thread-row.expanded .row-subject { margin: 0; font-weight: 600; }
+.thread-item .subject-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-item .thread-count { flex: none; }
+.thread-tree { background: var(--workspace-soft); border-bottom: 1px solid #efefeb; border-left: 3px solid var(--accent); padding: 0 12px 8px 56px; }
+.tree-row { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; height: 28px; text-align: left; background: none; border: 0; border-radius: 0 6px 6px 0; padding: 0 8px 0 20px; }
+.tree-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid #b4bcc1; }
+.tree-row:last-child::before { bottom: 50%; }
+.tree-row::after { content: ""; position: absolute; left: 0; top: 50%; width: 14px; border-top: 1px solid #b4bcc1; }
+.tree-row:hover { background: #fff; }
+.tree-row.current { background: #fff; }
+.tree-row strong { font-size: 13px; font-weight: 450; color: #4f595f; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-row.current strong { font-weight: 650; color: var(--accent); }
+.tree-row time { margin-left: auto; font-size: 11px; color: #7c8489; white-space: nowrap; }
+.thread-step { display: flex; align-items: center; gap: 6px; margin: -14px 0 14px; font-size: 12px; color: #626b71; }
+.profile > span:nth-child(2) { min-width: 0; }
+.profile strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

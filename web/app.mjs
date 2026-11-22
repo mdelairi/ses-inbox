@@ -43,7 +43,7 @@ const composeDialog = document.querySelector('#compose-dialog');
 const settingsDialog = document.querySelector('#settings-dialog');
 const aliasDialog = document.querySelector('#alias-dialog');
 const confirmDialog = document.querySelector('#confirm-dialog');
-let state, index, view = { folder: 'inbox', selected: null, checked: [], mailboxMenu: false, query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, domainMenu: false, filters: false, more: false };
+let state, index, view = { folder: 'inbox', selected: null, message: null, checked: [], mailboxMenu: false, query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, domainMenu: false, filters: false, more: false };
 // New mail without Check for new mail: a quiet reload when a new-mail notification arrives while the Inbox is open, or
 // when it's shown again after QUIET_AFTER. Never while a draft is open, a dialog is up or changes are saving, and a load
 // that overlapped a change is thrown away; it waits for the next chance instead.
@@ -77,6 +77,8 @@ const remoteLoaded = new Set();
 const searchCache = new Map();
 let searchTimer;
 const uid = () => crypto.randomUUID();
+// The signed-in account (set by the session client) when there is one; the sample owner in the local prototype.
+const profileName = () => document.documentElement.dataset.account || (liveMail ? activeAddress() : 'Taylor Example');
 const initials = name => String(name || '?').split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase();
 const prettySize = size => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`;
 function timeShort(date) { const value = new Date(date); return value.toDateString() === new Date().toDateString() ? value.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : value.toLocaleDateString([], { month: 'short', day: 'numeric' }); }
@@ -91,6 +93,9 @@ const mailboxDrafts = () => state.drafts.filter(draft => draft.domain === state.
 function threads() { return visibleThreads(state, { ...view, domain: state.selectedDomain, alias: activeAddress() }, index); }
 function selectedGroup() { return threads().find(group => group.id === view.selected); }
 function currentConversation() { return view.selected ? conversation(state, state.selectedDomain, view.selected, activeAddress()) : []; }
+// The one message of the open conversation shown in the reading pane: the picked one, or the latest.
+function shownMessage() { const messages = currentConversation(); return messages.find(message => message.id === view.message) || messages.at(-1); }
+const senderName = message => message.from.endsWith(`@${state.selectedDomain}`) && message.source !== 'automated' ? 'You' : message.fromName;
 function updateIndex() { index = liveMail ? { remote: searchCache } : createSearchIndex(state.messages); }
 function scheduleSearch() {
   clearTimeout(searchTimer);
@@ -133,7 +138,7 @@ function sidebarHTML() {
     <nav class="folder-nav" aria-label="Mail folders">${FOLDERS.map(folder => { const count = folder === 'drafts' ? mailboxDrafts().length : folder === 'inbox' ? state.messages.filter(message => message.domain === domain.id && mailboxEntries(message)[activeAddress()]?.folder === folder && !mailboxEntries(message)[activeAddress()].read).length : 0; return `<button class="folder-button${view.folder === folder && !view.query ? ' active' : ''}" data-action="folder" data-folder="${folder}" ${view.folder === folder && !view.query ? 'aria-current="page"' : ''}>${icon(folderIcons[folder])}<span>${folderNames[folder]}</span>${count ? `<b class="count">${count}</b>` : ''}</button>`; }).join('')}</nav>
     <div class="sidebar-spacer"></div>
     <div class="sidebar-bottom"><button class="folder-button settings-button" data-action="settings">${icon('settings')}<span>Aliases & settings</span></button></div>
-    <div class="profile"><span class="avatar">TE</span><span><strong>Taylor Example</strong><small>${liveMail ? 'Live mail' : 'Local prototype'}</small></span>${liveMail ? '' : '<span class="local-indicator" title="Sample data only"></span>'}</div></aside>`;
+    <div class="profile"><span class="avatar">${esc(initials(profileName().replace(/[@.]/g, ' ')))}</span><span><strong>${esc(profileName())}</strong><small>${liveMail ? 'Live mail' : 'Local prototype'}</small></span>${liveMail ? '' : '<span class="local-indicator" title="Sample data only"></span>'}</div></aside>`;
 }
 function topbarHTML() {
   return `<header class="topbar">${buttons('menu', 'Open navigation', 'toggle-sidebar', 'class="mobile-menu"').replace('class="icon-button"', 'class="icon-button mobile-menu"').replace(' class="mobile-menu"', '')}<div class="mailbox-picker"><button class="mailbox-switch" data-action="toggle-mailbox-menu" aria-haspopup="true" aria-expanded="${view.mailboxMenu}" aria-label="Switch inbox: ${esc(activeAddress())}"><span class="mailbox-switch-text"><strong>${esc(domainOf(state, state.selectedDomain).name)}</strong><span class="breadcrumb-address">${esc(activeAddress())}</span></span><span class="picker-chevron">${icon('chevron')}</span></button><span class="breadcrumb-folder">${icon('right')}<span>${view.query ? 'Search' : folderNames[view.folder]}</span></span>${view.mailboxMenu ? mailboxMenuHTML() : ''}</div>
@@ -164,10 +169,13 @@ function bulkHTML(groups) {
   return `<div class="list-filterbar bulk-bar" role="toolbar" aria-label="Selected conversations">${selectAllHTML(groups)}<strong class="bulk-count">${count} selected</strong><span class="bulk-actions">${barButton('read', 'Read', 'Mark as read', 'bulk-read')}${barButton('mail', 'Unread', 'Mark as unread', 'bulk-unread')}${folder !== 'archive' ? barButton('archive', 'Archive', 'Archive', 'bulk-move', 'data-folder="archive"') : ''}${misplaced(checkedGroups(), activeAddress()) ? barButton('inbox', 'Restore', 'Restore to Inbox or Sent', 'bulk-move', 'data-folder="restore"') : ''}${folder !== 'spam' ? barButton('spam', 'Spam', 'Move to Spam', 'bulk-move', 'data-folder="spam"') : ''}${folder === 'trash' ? barButton('trash', 'Delete', 'Delete permanently', 'bulk-delete') : barButton('trash', 'Trash', 'Move to Trash', 'bulk-move', 'data-folder="trash"')}${barButton('forward', 'Forward', 'Forward selected', 'bulk-forward', canCompose() ? '' : 'disabled')}</span>${buttons('close', 'Clear selection', 'bulk-clear')}</div>`;
 }
 function rowHTML(group) {
-  const message = group.latest, count = conversation(state, state.selectedDomain, group.id, activeAddress()).length;
+  const message = group.latest, all = conversation(state, state.selectedDomain, group.id, activeAddress()), count = all.length;
+  // The open conversation lists its messages beneath it, oldest first; the reading pane shows the picked one.
+  const shown = view.selected === group.id && count > 1 ? shownMessage() : null;
+  const tree = shown ? `<div class="thread-tree" role="group" aria-label="Messages in this conversation, oldest first">${all.map((item, i) => `<button class="tree-row${item.id === shown.id ? ' current' : ''}" data-action="open-message" data-id="${esc(item.id)}" aria-label="Show message ${i + 1} of ${count}, from ${esc(senderName(item))}" ${item.id === shown.id ? 'aria-current="true"' : ''}><strong>${esc(senderName(item))}</strong><time datetime="${item.date}">${timeFull(item.date)}</time></button>`).join('')}</div>` : '';
   const own = message.from.endsWith(`@${state.selectedDomain}`), address = own ? `To: ${message.to.join(', ')}` : (message.to || []).filter(to => to.endsWith(`@${state.selectedDomain}`)).join(', ');
   const checked = view.checked.includes(group.id);
-  return `<div class="thread-item${checked ? ' checked' : ''}"><label class="row-check"><input type="checkbox" data-action="check-thread" data-thread="${esc(group.id)}" aria-label="Select ${esc(message.subject)}" ${checked ? 'checked' : ''}></label><button class="thread-row${view.selected === group.id ? ' selected' : ''}${group.unread ? ' unread' : ''}" data-action="open-thread" data-thread="${esc(group.id)}" aria-label="Open ${esc(message.subject)}" ${view.selected === group.id ? 'aria-current="true"' : ''}>${group.unread ? '<span class="unread-dot"></span>' : ''}<span class="row-head"><strong>${esc(own && message.source !== 'automated' ? 'You' : message.fromName)}</strong><time datetime="${message.date}">${timeShort(message.date)}</time></span><div class="row-subject">${esc(message.subject)}${count > 1 ? `<span class="thread-count">${count}</span>` : ''}</div><p class="row-snippet">${esc(message.text.replace(/\s+/g, ' '))}</p><div class="row-foot"><span class="row-alias">${esc(address)}</span>${tags(message)}${message.attachments?.length || message.hasAttachments ? icon('clip') : ''}</div></button></div>`;
+  return `<div class="thread-item${checked ? ' checked' : ''}"><label class="row-check"><input type="checkbox" data-action="check-thread" data-thread="${esc(group.id)}" aria-label="Select ${esc(message.subject)}" ${checked ? 'checked' : ''}></label><button class="thread-row${view.selected === group.id ? ' selected' : ''}${tree ? ' expanded' : ''}${group.unread ? ' unread' : ''}" data-action="open-thread" data-thread="${esc(group.id)}" aria-label="Open ${esc(message.subject)}" ${view.selected === group.id ? 'aria-current="true"' : ''}>${group.unread ? '<span class="unread-dot"></span>' : ''}<span class="row-head"><strong>${esc(own && message.source !== 'automated' ? 'You' : message.fromName)}</strong><time datetime="${message.date}">${timeShort(message.date)}</time></span><div class="row-subject"><span class="subject-text">${esc(message.subject)}</span>${count > 1 ? `<span class="thread-count">${count}</span>` : ''}</div><div class="row-foot"><span class="row-alias">${esc(address)}</span>${tags(message)}${message.attachments?.length || message.hasAttachments ? icon('clip') : ''}</div></button></div>${tree}`;
 }
 function draftRowHTML(draft) { return `<button class="thread-row draft-row" data-action="resume-draft" data-id="${esc(draft.id)}" aria-label="Resume draft: ${esc(draft.subject || 'New message')}"><span class="row-head"><strong>${esc(draft.to || 'No recipient yet')}</strong><time>${timeShort(draft.updatedAt)}</time></span><div class="row-subject">${esc(draft.subject || 'New message')}</div><p class="row-snippet">${esc((draft.text || '').replace(/\s+/g, ' ') || 'Start writing…')}</p><div class="row-foot"><span>${esc(aliasesOf(state, draft.domain).find(alias => alias.id === draft.aliasId)?.address || 'Choose a sender')}</span><span class="tag">Draft</span></div></button>`; }
 function mailboxTabsHTML() {
@@ -181,25 +189,25 @@ function listHTML() {
   const title = view.query ? 'Search results' : folderNames[view.folder];
   return `<section class="message-list" aria-label="${esc(title)} message list">${mailboxTabsHTML()}<div class="list-heading"><div><h1>${title}</h1><p>${view.query ? `“${esc(view.query)}” · ` : ''}${count} ${draftView ? count === 1 ? 'draft' : 'drafts' : count === 1 ? 'conversation' : 'conversations'}${!draftView && view.folder === 'inbox' && !view.query ? ' · this address only' : ''}</p></div>${buttons('refresh', liveMail ? 'Check for new mail' : 'Refresh local preview', 'refresh')}</div>${draftView ? '' : view.checked.length ? bulkHTML(groups) : filterHTML(groups)}<div class="thread-list">${draftView ? drafts.map(draftRowHTML).join('') : groups.map(rowHTML).join('')}${!count ? `<div class="empty-list">${icon(view.query ? 'search' : folderIcons[view.folder])}<strong>${view.query ? 'No matching conversations' : draftView ? 'A little room for your next thought' : `Nothing in ${folderNames[view.folder]}`}</strong><p>${view.query ? 'Try another word or clear your filters.' : draftView ? 'Your unfinished messages will be kept here.' : view.folder === 'trash' ? 'Mail stays here until you delete it permanently.' : 'You’re all caught up here.'}</p>${view.query || view.alias || view.source || view.environment || view.unread ? '<button class="text-button" data-action="reset-view">Clear search & filters</button>' : ''}</div>` : ''}</div><div class="list-footer"><span>${liveMail ? '' : 'Sample mail · '}${esc(activeAddress())}</span></div></section>`;
 }
-function mailCardHTML(message, collapsed) {
+function mailCardHTML(message) {
   const sender = `<span class="sender-avatar">${esc(initials(message.fromName))}</span>`;
   const markup = `<div class="sender-line">${sender}<div class="sender-details"><strong>${esc(message.fromName)}<span class="email-address">&lt;${esc(message.from)}&gt;</span></strong><p>to ${esc(message.to.join(', '))}${message.cc?.length ? ` · cc ${esc(message.cc.join(', '))}` : ''}${message.bcc?.length ? ` · bcc ${esc(message.bcc.join(', '))}` : ''}</p>${message.source === 'automated' ? `<p>${esc(message.producer || 'Project mail')} · ${message.environment === 'staging' ? 'Staging' : 'Production'}</p>` : ''}${message.delivery ? `<p>${DELIVERY[message.delivery.state] || esc(message.delivery.state)}${message.delivery.detail ? ` · ${esc(message.delivery.detail)}` : ''}</p>` : ''}${message.quarantined ? '<p>This message failed a virus check. Its attachments are withheld.</p>' : ''}</div><time datetime="${message.date}">${timeFull(message.date)}</time></div>
     ${message.html ? `${/src\s*=\s*["']https?:/i.test(message.html) && !remoteLoaded.has(message.id) && !state.preferences.externalImages ? `<div class="remote-notice">Remote images are hidden.<button data-action="load-images" data-id="${esc(message.id)}">Load images</button></div>` : ''}<iframe class="message-frame" title="Email from ${esc(message.fromName)}" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" data-message-frame="${esc(message.id)}"></iframe>` : `<div class="body-text">${esc(message.text)}</div>`}
     ${message.attachments?.length ? `<div class="attachment-list">${message.attachments.filter(file => !file.inline).map(file => `<button class="attachment" data-action="download" data-message="${esc(message.id)}" data-id="${esc(file.id)}">${icon('drafts')}<span><strong>${esc(file.name)}</strong><small>${prettySize(file.size)} · Download</small></span><span class="download-icon">${icon('download')}</span></button>`).join('')}</div>` : ''}`;
-  return `<article class="message-card" aria-label="Message from ${esc(message.fromName)}">${collapsed ? `<details><summary><span class="collapsed-message">${sender}<strong>${esc(message.fromName)}</strong><span class="preview">${esc(message.text.slice(0, 90))}</span><time datetime="${message.date}">${timeFull(message.date)}</time>${icon('chevron')}</span></summary>${markup}</details>` : markup}</article>`;
+  return `<article class="message-card" aria-label="Message from ${esc(message.fromName)}">${markup}</article>`;
 }
 function readerHTML() {
   const group = selectedGroup();
   if (!group) return `<section class="reader" aria-label="Reading pane"><div class="reader-toolbar"><span class="toolbar-note">${icon('mail')}A calmer place for your project mail</span></div><div class="reader-empty"><div class="empty-icon">${icon('mail')}</div><h2>One address at a time.</h2><p>Choose a conversation, or start a new one from ${esc(activeAddress())}.</p><button class="secondary-button" data-action="compose" ${canCompose() ? '' : 'disabled'}>${icon('plus')}Write a message</button><span class="keyboard-note"><kbd>C</kbd> to compose <span>·</span> <kbd>/</kbd> to search</span></div></section>`;
-  const messages = currentConversation(), message = messages.at(-1), position = threads().findIndex(item => item.id === group.id), matches = group.matching;
+  const messages = currentConversation(), message = shownMessage(), at = messages.findIndex(item => item.id === message.id), position = threads().findIndex(item => item.id === group.id), matches = group.matching;
   const trash = matches.every(item => item.folder === 'trash');
   return `<section class="reader" aria-label="Reading pane"><div class="reader-toolbar">${buttons('left', 'Back to message list', 'back', 'data-back="true"').replace('class="icon-button"', 'class="icon-button back-button"')}<div class="reader-actions">${barButton('archive', 'Archive', 'Archive conversation', 'archive')}${barButton('trash', trash ? 'Delete' : 'Trash', trash ? 'Delete permanently' : 'Move conversation to Trash', trash ? 'delete-permanently' : 'trash')}${barButton('mail', 'Unread', 'Mark conversation unread', 'mark-unread')}<span class="toolbar-separator"></span>${barButton('reply', 'Reply', 'Reply', 'reply', `data-bar-only ${canCompose() ? '' : 'disabled'}`)}${barButton('forward', 'Forward', 'Forward', 'forward', `data-bar-only ${canCompose() ? '' : 'disabled'}`)}${barButton('more', 'More', 'More message actions', 'toggle-more')}</div>
     <div class="right-actions"><span class="message-position">${position + 1} of ${threads().length}</span>${buttons('left', 'Previous conversation', 'previous', position === 0 ? 'disabled' : '')}${buttons('right', 'Next conversation', 'next', position === threads().length - 1 ? 'disabled' : '')}</div></div>
     ${view.more ? `<div class="popover-menu">${misplaced([group], activeAddress()) ? `<button data-action="restore">${icon('inbox')}Restore to ${matches.every(item => homeFolder(item, activeAddress()) === 'sent') ? 'Sent' : 'Inbox'}</button>` : ''}<button data-action="spam">${icon('spam')}Move to Spam</button><button data-action="reply-all">${icon('reply')}Reply all</button>${liveMail ? '' : `<button data-action="download-original">${icon('download')}Download sample .eml</button>`}</div>` : ''}
     <div class="reader-scroll"><div class="subject-line"><h2>${esc(group.latest.subject)}</h2></div><div class="reader-labels"><span class="recipient-badge">${esc(activeAddress())}</span>${tags(group.latest)}${group.latest.status === 'sample' && group.latest.folder === 'sent' ? '<span class="tag">Sample message</span>' : ''}</div>
     ${trash ? '<div class="retention-note">This conversation is in Trash. It will stay here until you explicitly delete it permanently. <button class="text-button" data-action="restore">Restore</button></div>' : ''}
-    ${messages.length > 1 ? `<p class="thread-note">${messages.length} messages · oldest first, latest open at the bottom</p>` : ''}
-    ${messages.map((item, i) => mailCardHTML(item, i < messages.length - 1)).join('')}
+    ${messages.length > 1 ? `<div class="thread-step">${buttons('left', 'Older message', 'step-message', `data-step="-1" ${at === 0 ? 'disabled' : ''}`)}<span>Message ${at + 1} of ${messages.length}</span>${buttons('right', 'Newer message', 'step-message', `data-step="1" ${at === messages.length - 1 ? 'disabled' : ''}`)}</div>` : ''}
+    ${mailCardHTML(message)}
     <div class="reply-actions"><button class="secondary-button" data-action="reply" ${canCompose() ? '' : 'disabled'}>${icon('reply')}Reply</button><button class="secondary-button" data-action="forward" ${canCompose() ? '' : 'disabled'}>${icon('forward')}Forward</button></div></div></section>`;
 }
 // The frame runs no scripts but shares the app's origin, so the app can read how tall the
@@ -233,14 +241,16 @@ function render() {
   state.selectedMailboxes ||= {}; state.selectedMailboxes[domain.id] = activeAddress();
   if (view.selected && !selectedGroup()) view.selected = null;
   document.documentElement.style.setProperty('--accent', domain.id === 'example.org' ? '#365f8c' : '#426859');
+  const listScroll = root.querySelector('.thread-list')?.scrollTop || 0;
   root.innerHTML = `<div class="app-shell${view.selected ? ' has-selection' : ''}${view.checked.length ? ' has-checked' : ''}${view.mobileSidebar ? ' sidebar-open' : ''}"><button class="mobile-backdrop" data-action="close-sidebar" aria-label="Close navigation"></button>${sidebarHTML()}<main class="workspace">${topbarHTML()}<div class="mail-layout">${listHTML()}${readerHTML()}</div><button class="mobile-compose" data-action="compose" aria-label="Compose" ${canCompose() ? '' : 'disabled'}>${icon('plus')}Compose</button></main></div>`;
   const all = root.querySelector('#check-all'); if (all) all.indeterminate = all.dataset.partial === 'true';
+  const list = root.querySelector('.thread-list'); if (list) list.scrollTop = listScroll;
   mountFrames(); document.title = `${view.query ? 'Search' : folderNames[view.folder]} · ${activeAddress()}`;
 }
 
 function setFolder(folder) { searchCache.clear(); view = { ...view, folder, selected: null, checked: [], query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, filters: false, more: false }; render(); }
 async function openThread(thread) {
-  view.selected = thread; view.more = false;
+  view.selected = thread; view.message = null; view.more = false;
   for (const message of state.messages.filter(message => message.domain === state.selectedDomain && message.thread === thread && inMailbox(message, activeAddress()))) setMailboxState(message, activeAddress(), { read: true });
   // Keep an unread-filtered conversation visible while it is being read.
   if (view.unread) view.unread = false;
@@ -314,7 +324,7 @@ function openComposer({ draftId, mode = 'new', forward } = {}) {
   if (composer) return;
   if (!canCompose()) { toast('This mailbox is read only. Select an enabled address to compose.', { error: true }); return; }
   const existing = state.drafts.find(draft => draft.id === draftId && draft.domain === state.selectedDomain && draft.aliasId === selectedMailbox(state)?.id);
-  const message = currentConversation().at(-1), ownAddresses = aliasesOf(state, state.selectedDomain).map(alias => alias.address);
+  const message = shownMessage(), ownAddresses = aliasesOf(state, state.selectedDomain).map(alias => alias.address);
   const domain = existing?.domain || state.selectedDomain;
   const alias = selectedMailbox(state);
   let body = '', to = '', cc = '', subject = '', thread, replyToId;
@@ -498,6 +508,8 @@ document.addEventListener('click', async event => {
       case 'resume-draft': openComposer({ draftId: id }); break;
       case 'open-thread': await openThread(thread); break;
       case 'back': view.selected = null; render(); break;
+      case 'open-message': view.message = id; view.more = false; render(); break;
+      case 'step-message': { const messages = currentConversation(), shown = shownMessage(), next = messages[messages.findIndex(item => item.id === shown?.id) + Number(element.dataset.step)]; if (next) { view.message = next.id; view.more = false; render(); } break; }
       case 'show-all': view.unread = false; render(); break;
       case 'show-unread': view.unread = true; view.selected = null; render(); break;
       case 'toggle-filters': view.filters = !view.filters; render(); break;
@@ -522,7 +534,7 @@ document.addEventListener('click', async event => {
       case 'load-images': remoteLoaded.add(id); render(); break;
       case 'delete-permanently': { const group = selectedGroup(); if (!group) break; const ids = group.matching.map(item => item.id), activeDomain = state.selectedDomain, address = activeAddress(); confirmAction('Delete this conversation permanently?', 'It will be removed from this mailbox. Copies delivered to another address stay there. The hosted app will retain private recovery copies for up to 30 days, while keeping deleted mail out of your inbox.', 'Delete permanently', async () => { permanentlyDelete(state, activeDomain, ids, new Date().toISOString(), address); view.selected = null; render(); await commit({ reindex: true }); toast(liveMail ? 'Permanently deleted.' : 'Permanently removed from this local preview.'); }); break; }
       case 'download': { const message = state.messages.find(item => item.id === element.dataset.message && item.domain === state.selectedDomain), file = message?.attachments.find(item => item.id === id); if (file && liveMail && !file.blob) { const link = document.createElement('a'); link.href = await attachmentUrl(file); link.rel = 'noopener'; link.click(); } else if (file) downloadBlob(file.blob || new Blob([file.content || ''], { type: file.type }), file.name); break; }
-      case 'download-original': { const message = currentConversation().at(-1); if (message) downloadBlob(new Blob([`From: ${message.from}\r\nTo: ${message.to.join(', ')}\r\nSubject: ${message.subject.replace(/[\r\n]/g, ' ')}\r\nDate: ${new Date(message.date).toUTCString()}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nX-Local-Prototype: true\r\n\r\n${message.text.replace(/\r?\n/g, '\r\n')}`], { type: 'message/rfc822' }), 'sample-message.eml'); view.more = false; render(); break; }
+      case 'download-original': { const message = shownMessage(); if (message) downloadBlob(new Blob([`From: ${message.from}\r\nTo: ${message.to.join(', ')}\r\nSubject: ${message.subject.replace(/[\r\n]/g, ' ')}\r\nDate: ${new Date(message.date).toUTCString()}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nX-Local-Prototype: true\r\n\r\n${message.text.replace(/\r?\n/g, '\r\n')}`], { type: 'message/rfc822' }), 'sample-message.eml'); view.more = false; render(); break; }
       case 'close-composer': await closeComposer(); break;
       case 'toggle-cc': document.querySelector('#extra-recipients').hidden = !document.querySelector('#extra-recipients').hidden; break;
       case 'attach-files': rememberSelection(); document.querySelector('#attachment-input').click(); break;

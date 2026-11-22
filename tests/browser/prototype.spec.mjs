@@ -69,8 +69,14 @@ test('a long message scrolls in the reading pane and conversations show their or
   await page.getByRole('button', { name: 'Reply', exact: true }).last().scrollIntoViewIfNeeded(); await expect(frame.getByText('Line 150', { exact: true })).toBeInViewport();
   await folder(page, 'Inbox'); await mailbox(page, 'taylor@example.com');
   await page.getByRole('button', { name: 'Open A conversation about the next workshop', exact: true }).click();
-  await expect(page.locator('.thread-note')).toContainText('2 messages · oldest first');
-  await expect(page.locator('.collapsed-message time')).toHaveCount(1);
+  // The open conversation lists its messages on the left, oldest first; the pane shows one, the latest at first.
+  const tree = page.getByRole('group', { name: 'Messages in this conversation, oldest first' }).getByRole('button');
+  await expect(tree).toHaveCount(2); await expect(tree.nth(0)).toContainText('You'); await expect(tree.nth(1)).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('.thread-step')).toContainText('Message 2 of 2'); await expect(page.locator('.message-card')).toHaveCount(1);
+  await expect(page.locator('.message-card')).toContainText('Would Thursday afternoon work');
+  await tree.nth(0).click();
+  await expect(page.locator('.thread-step')).toContainText('Message 1 of 2'); await expect(page.locator('.message-card')).toContainText('I have attached a first outline');
+  await page.getByRole('button', { name: 'Newer message' }).click(); await expect(page.locator('.message-card')).toContainText('Would Thursday afternoon work');
 });
 
 test('archive undo and permanent deletion stay within the selected domain', async ({ page }) => {

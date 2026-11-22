@@ -4,6 +4,8 @@ async function readSession() {
   if (result.status === 401) { location.replace('/signin'); return; }
   if (!result.ok) throw new Error('Session unavailable');
   session = await result.json();
+  // The app shows who is signed in.
+  if (session.email) { document.documentElement.dataset.account = session.email; const name = document.querySelector('.profile strong'); if (name) name.textContent = session.email; }
 }
 await readSession();
 document.addEventListener('click', async event => {
