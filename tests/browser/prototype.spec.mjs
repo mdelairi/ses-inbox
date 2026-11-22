@@ -23,7 +23,7 @@ test('domain-scoped search and staging filters', async ({ page }) => {
 test('alias-aware reply and drafts survive domain changes and reload', async ({ page }) => {
   await mailbox(page, 'taylor@example.com');
   await page.getByRole('button', { name: 'Open A conversation about the next workshop', exact: true }).click();
-  await page.getByRole('button', { name: 'Reply', exact: true }).click();
+  await page.getByRole('button', { name: 'Reply', exact: true }).first().click();
   await expect(page.locator('#compose-from')).toHaveValue('d-taylor');
   await expect(page.locator('#compose-to')).toHaveValue('alex@example.net');
   await page.locator('#compose-subject').fill('Draft that must stay with Example');
@@ -147,7 +147,7 @@ test('info and support have separate inboxes, drafts, search, sent and fixed sen
   await page.getByRole('searchbox', { name: 'Search current mailbox' }).fill('closer look'); await expect(page.locator('.thread-row')).toHaveCount(0);
   await folder(page, 'Drafts'); await expect(page.locator('.draft-row')).toHaveCount(0);
   await folder(page, 'Inbox'); await page.getByRole('button', { name: 'Open A question about inviting our team', exact: true }).click();
-  await page.getByRole('button', { name: 'Reply', exact: true }).click();
+  await page.getByRole('button', { name: 'Reply', exact: true }).first().click();
   await expect(page.locator('#compose-from')).toHaveValue('t-support'); await expect(page.locator('#compose-from')).toBeDisabled();
   await page.locator('#compose-subject').fill('Support-only reply'); await page.getByRole('button', { name: 'Send locally', exact: true }).click();
   await folder(page, 'Sent'); await expect(page.getByRole('button', { name: 'Open Support-only reply', exact: true })).toBeVisible();

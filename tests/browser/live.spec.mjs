@@ -69,7 +69,7 @@ test('real mail: read with inline images, reply, archive, and server search', as
   await expect(page.getByRole('button', { name: /brief\.pdf/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /logo\.png/ })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Reply', exact: true }).click();
+  await page.getByRole('button', { name: 'Reply', exact: true }).first().click();
   await page.locator('#message-editor').click(); await page.keyboard.type('Thursday works for me.');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('.toast').filter({ hasText: 'Sent.' })).toBeVisible();

@@ -267,3 +267,14 @@ input::placeholder, textarea::placeholder { color: #858c91; }
 .thread-step { display: flex; align-items: center; gap: 6px; margin: -14px 0 14px; font-size: 12px; color: #626b71; }
 .profile > span:nth-child(2) { min-width: 0; }
 .profile strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-row.draft-row { min-height: 0; padding-top: 14px; padding-bottom: 12px; }
+.draft-row .row-head { margin-bottom: 4px; }
+.draft-row .row-subject { margin-bottom: 5px; }
+/* Beside the list, Reply leads the reader toolbar as its one filled button, with Forward next to it. */
+@media (min-width: 651px) {
+  .reader-actions [data-action="reply"], .reader-actions [data-action="forward"] { display: inline-flex; order: -1; }
+  .reader-actions [data-action="reply"] { width: auto; height: 34px; padding: 0 16px 0 12px; gap: 8px; margin-right: 4px; border-radius: 6px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 550; }
+  .reader-actions [data-action="reply"]:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 85%, black); }
+  .reader-actions [data-action="reply"] .bar-label { display: inline; }
+  .reader-actions [data-action="reply"] svg { color: #fff; }
+}
