@@ -17,8 +17,8 @@
   "distributionId": "E1EXAMPLE00004",
   "distributionDomain": "d2example00000.cloudfront.net",
   "authTable": "project-inbox-prod-app-Sessions-EXAMPLE",
-  "artifactKey": "releases/773fbdd82b8eb7a66459673c554817fbf8fcc8a9123b84687bb8fbe09f4662a8/lambda.zip",
-  "lambdaSha256": "773fbdd82b8eb7a66459673c554817fbf8fcc8a9123b84687bb8fbe09f4662a8",
+  "artifactKey": "releases/09e71597defadeb2de658d0f6405e011efda9c27b2fc7af2fabfcb7ab967ffff/lambda.zip",
+  "lambdaSha256": "09e71597defadeb2de658d0f6405e011efda9c27b2fc7af2fabfcb7ab967ffff",
   "mailBucket": "project-inbox-prod-storage-mail-EXAMPLE",
   "mailDatabaseId": "exampleclusterprod00000000",
   "configurationSet": "project-inbox-prod-storage",
@@ -97,8 +97,8 @@
     "worker": "project-inbox-prod-capture-Worker-EXAMPLE",
     "workerRoleArn": "arn:aws:iam::111111111111:role/project-inbox-prod-capture-Role-EXAMPLE",
     "websiteFeedbackTopicArn": "arn:aws:sns:us-east-1:111111111111:project-inbox-prod-capture-WebsiteFeedback-EXAMPLE",
-    "artifactKey": "releases/f664a0b33a7d732ce05208d39ac1994a454c281ee636a6e935dfc1ef5fba4c24/lambda.zip",
-    "lambdaSha256": "f664a0b33a7d732ce05208d39ac1994a454c281ee636a6e935dfc1ef5fba4c24",
+    "artifactKey": "releases/09e71597defadeb2de658d0f6405e011efda9c27b2fc7af2fabfcb7ab967ffff/lambda.zip",
+    "lambdaSha256": "09e71597defadeb2de658d0f6405e011efda9c27b2fc7af2fabfcb7ab967ffff",
     "sources": {
       "website-production": {
         "stack": "MassWebsiteContactProduction",
