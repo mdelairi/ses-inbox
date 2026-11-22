@@ -9,9 +9,13 @@ const local = url => typeof url === 'string' && url.startsWith('/') && !url.star
 self.addEventListener('push', event => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { data = {}; }
-  event.waitUntil(self.registration.showNotification(String(data.title || 'New mail').slice(0, 120), {
-    body: String(data.body || '').slice(0, 200), tag: typeof data.tag === 'string' ? data.tag : undefined, icon: '/icon-192.png', badge: '/icon-192.png', data: { url: local(data.url) },
-  }));
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(String(data.title || 'New mail').slice(0, 120), {
+      body: String(data.body || '').slice(0, 200), tag: typeof data.tag === 'string' ? data.tag : undefined, icon: '/icon-192.png', badge: '/icon-192.png', data: { url: local(data.url) },
+    }),
+    // An open Inbox shows the new mail at once (a quiet reload; nothing from the push itself is used).
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windows => { for (const client of windows) client.postMessage({ type: 'inbox:new-mail' }); }),
+  ]));
 });
 
 // Focus an open Inbox window and let it open the conversation, or open a new one.

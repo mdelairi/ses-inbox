@@ -187,6 +187,42 @@ test('real mail: select several conversations to mark, move and forward them tog
   await expect.poll(async () => (await rowsIn()).map(row => row.subject)).toEqual(['Fwd: 2 conversations', 'Third request']);
 });
 
+test('real mail: new mail shows on its own, after a notification or coming back, never over an open draft', async ({ context, page }) => {
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await page.clock.install();
+  const t = await live(context, page, f => f.deliver(['info@example.com'], { subject: 'First note', messageId: '<first@example.net>', text: 'One.' }));
+  await expect(page.getByRole('button', { name: 'Open First note', exact: true })).toBeVisible();
+  const notified = () => page.evaluate(() => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: { type: 'inbox:new-mail' } })));
+  const shown = () => page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
+
+  // A new-mail notification while the Inbox is open: the message appears, quietly.
+  await t.deliver(['info@example.com'], { subject: 'Second note', messageId: '<second@example.net>', text: 'Two.' });
+  await notified();
+  await expect(page.getByRole('button', { name: 'Open Second note', exact: true })).toBeVisible();
+  await expect(page.locator('.toast').filter({ hasText: 'Mail is up to date.' })).toHaveCount(0);
+
+  // Coming back to the Inbox: only once the last load is over 15 seconds old.
+  await t.deliver(['info@example.com'], { subject: 'Third note', messageId: '<third@example.net>', text: 'Three.' });
+  await shown();
+  await page.clock.runFor(2000);
+  await expect(page.getByRole('button', { name: 'Open Third note', exact: true })).toHaveCount(0);
+  await page.clock.fastForward(16000);
+  await shown();
+  await expect(page.getByRole('button', { name: 'Open Third note', exact: true })).toBeVisible();
+
+  // An open draft holds the reload; once it's closed, the new mail comes in.
+  await page.getByRole('button', { name: 'Compose', exact: true }).first().click();
+  await page.locator('#compose-subject').fill('Waiting draft');
+  await t.deliver(['info@example.com'], { subject: 'Fourth note', messageId: '<fourth@example.net>', text: 'Four.' });
+  await notified();
+  await page.clock.runFor(6000);
+  await expect(page.locator('#compose-subject')).toHaveValue('Waiting draft');
+  await page.getByRole('button', { name: 'Save and close draft' }).click();
+  await page.clock.runFor(6000);
+  await expect(page.getByRole('button', { name: 'Open Fourth note', exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('automated capture uses a read-only sender mailbox and shows staging/source labels', async ({ context, page }) => {
   await live(context, page, async f => {
     const captureObjects = versionedObjects(), source = 'exampleorg-staging', id = 'e5d7ab9f-78bc-4ac7-9e0c-35807fe0ec10';

@@ -44,6 +44,31 @@ const settingsDialog = document.querySelector('#settings-dialog');
 const aliasDialog = document.querySelector('#alias-dialog');
 const confirmDialog = document.querySelector('#confirm-dialog');
 let state, index, view = { folder: 'inbox', selected: null, checked: [], mailboxMenu: false, query: '', alias: '', source: '', environment: '', unread: false, mobileSidebar: false, domainMenu: false, filters: false, more: false };
+// New mail without Check for new mail: a quiet reload when a new-mail notification arrives while the Inbox is open, or
+// when it's shown again after QUIET_AFTER. Never while a draft is open, a dialog is up or changes are saving, and a load
+// that overlapped a change is thrown away; it waits for the next chance instead.
+const QUIET_AFTER = 15000;
+let lastLoad = Date.now(), changes = 0, quietRetry = null;
+async function quietRefresh() {
+  if (!liveMail || quietRetry) return;
+  const busy = () => refreshing || composer || hasUnsavedChanges() || document.querySelector('dialog[open]');
+  if (busy()) { quietRetry = setTimeout(() => { quietRetry = null; if (document.visibilityState === 'visible') void quietRefresh(); }, 5000); return; }
+  const before = changes;
+  refreshing = true;
+  try {
+    await saveQueue.catch(() => {});
+    const saved = await loadState();
+    if (!saved || changes !== before || hasUnsavedChanges()) return;
+    state = saved; searchCache.clear(); updateIndex(); lastLoad = Date.now(); render();
+    // The open conversation keeps its bodies: they're loaded again, as opening it would.
+    if (view.selected && currentConversation().some(message => !message.loaded)) {
+      const thread = view.selected;
+      await loadConversation(state, state.selectedDomain, thread, activeAddress()).catch(() => {});
+      if (view.selected === thread) render();
+    }
+  } catch { /* Check for new mail still works, and says why when it can't. */ }
+  finally { refreshing = false; }
+}
 let composer = null, draftTimer, saveQueue = Promise.resolve(), settingsTab = 'aliases', settingsDomain, confirmCallback, lastRange, refreshing = false, lastChecked = null, pushStatus = null;
 // Live forwarding rules by receiving address, loaded when the Addresses settings open.
 const forwardRules = new Map();
@@ -92,6 +117,7 @@ function toast(message, { undo, error = false } = {}) {
   document.querySelector('#toasts').append(element); setTimeout(() => element.remove(), undo ? 9000 : 5000);
 }
 async function commit({ reindex = false } = {}) {
+  changes++;
   if (reindex) updateIndex();
   const snapshot = structuredClone(state);
   const pending = saveQueue.catch(() => {}).then(() => persistState(snapshot)); saveQueue = pending;
@@ -466,7 +492,7 @@ document.addEventListener('click', async event => {
       case 'refresh': {
         if (sharedStorage && composer) { toast('Save and close your draft before refreshing.'); break; }
         refreshing = true; root.inert = true;
-        try { await saveQueue.catch(() => {}); const saved = await loadState(); if (saved) { state = saved; searchCache.clear(); updateIndex(); render(); } toast(liveMail ? 'Mail is up to date.' : sharedStorage ? 'Shared sample mailbox is up to date.' : 'Local sample mailbox is up to date.'); }
+        try { await saveQueue.catch(() => {}); const saved = await loadState(); if (saved) { state = saved; searchCache.clear(); updateIndex(); lastLoad = Date.now(); render(); } toast(liveMail ? 'Mail is up to date.' : sharedStorage ? 'Shared sample mailbox is up to date.' : 'Local sample mailbox is up to date.'); }
         finally { refreshing = false; root.inert = false; }
         break;
       }
@@ -627,6 +653,10 @@ async function start() {
   updateIndex(); settingsDomain = state.selectedDomain; render();
   // The phone and desktop layouts differ in markup (e.g. the search hint), not only in CSS.
   matchMedia('(max-width: 650px)').addEventListener('change', () => { if (!refreshing) render(); });
+  if (liveMail) {
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - lastLoad > QUIET_AFTER) void quietRefresh(); });
+    navigator.serviceWorker?.addEventListener('message', event => { if (event.data?.type === 'inbox:new-mail') void quietRefresh(); });
+  }
   if (liveMail && notifications.supported()) {
     notifications.register().catch(() => {});
     navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type === 'inbox:open') openLink(event.data.url, { reload: true }).catch(error => toast(error.message, { error: true })); });
